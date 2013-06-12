@@ -1,11 +1,8 @@
 package main
 
 import (
-	//"github.com/speps/go-hashids"
-	//"fmt"
-	//"html"
-	"crypto/sha256"
-	"io"
+	"bufio"
+	//"io"
 	"log"
 	"net"
 	"net/http"
@@ -13,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"syscall"
 )
 
@@ -30,10 +28,37 @@ func removeIfStartsWith(s, start string) string {
 	return s[len(start):]
 }
 
+type FileId int64
+
+func newId() FileId {
+	f, err := os.OpenFile("/srv/bittwiddlers.org/i-host/count", os.O_RDWR | os.O_CREATE, 0600)
+	if err != nil {
+		f, err = os.Create("/srv/bittwiddlers.org/i-host/count")
+	}
+	defer f.Close()
+
+	// Lock the file for exclusive acccess:
+	syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+
+	scanner := bufio.NewScanner(f)
+	scanner.Scan()
+	line := scanner.Text()
+
+	id64, err := strconv.ParseInt(line, 10, 0)
+	if err != nil {
+		id64 = 10000
+	}
+	id64++
+
+	f.Truncate(0)
+	f.Seek(0, 0)
+	f.WriteString(strconv.FormatInt(id64, 10))
+
+	return FileId(id64)
+}
+
 func postImage(rsp http.ResponseWriter, req *http.Request) {
-	log.Printf("POST")
 	imgurl_s := req.FormValue("url")
-	log.Printf("url = %s", imgurl_s)
 	if imgurl_s != "" {
 		log.Printf("%s", imgurl_s)
 
@@ -46,8 +71,9 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Split the absolute path by dir and filename:
 		_, filename := path.Split(imgurl.Path)
-		log.Printf("%s", filename)
+		log.Printf("Downloading %s", filename)
 
+		/*
 		// GET the url:
 		img_rsp, err := http.Get(imgurl_s)
 		if err != nil {
@@ -58,6 +84,8 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Create a local file:
 		local_path := path.Join("/srv/bittwiddlers.org/i-host", filename)
+		log.Printf("to %s", local_path)
+
 		local_file, err := os.Create(local_path)
 		if err != nil {
 			rsp.WriteHeader(500)
@@ -65,21 +93,18 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 		defer local_file.Close()
 
-		// Tee the downloaded file into a hasher and copy it to a local file:
-		h := sha256.New()
-
-		mw := io.MultiWriter(local_file, h)
-
-		// Copy the download response to the local file:
-		_, err = io.Copy(mw, img_rsp.Body)
+		// Download file:
+		_, err = io.Copy(local_file, img_rsp.Body)
 		if err != nil {
 			rsp.WriteHeader(500)
 			return
 		}
+		*/
 
-		// Report the hash:
-		hv := h.Sum(nil)
-		log.Printf("%x", hv)
+		// Acquire the next sequential FileId:
+		id := newId()
+		log.Printf("%d", int(id))
+
 	}
 }
 
