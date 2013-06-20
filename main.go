@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	//"io"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -28,10 +28,34 @@ func removeIfStartsWith(s, start string) string {
 	return s[len(start):]
 }
 
-type FileId int64
+const base62Alphabet = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+// base62Encode encodes a number to a base62 string representation.
+func base62Encode(num uint64) string {
+	if num == 0 {
+		return "0"
+	}
+
+	arr := []uint8{}
+	base := uint64(len(base62Alphabet))
+
+	for num > 0 {
+		rem := num % base
+		num = num / base
+		arr = append(arr, base62Alphabet[rem])
+	}
+
+	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+		arr[i], arr[j] = arr[j], arr[i]
+	}
+
+	return string(arr)
+}
+
+type FileId uint64
 
 func newId() FileId {
-	f, err := os.OpenFile("/srv/bittwiddlers.org/i-host/count", os.O_RDWR | os.O_CREATE, 0600)
+	f, err := os.OpenFile("/srv/bittwiddlers.org/i-host/count", os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		f, err = os.Create("/srv/bittwiddlers.org/i-host/count")
 	}
@@ -57,6 +81,8 @@ func newId() FileId {
 	return FileId(id64)
 }
 
+var webRoot string
+
 func postImage(rsp http.ResponseWriter, req *http.Request) {
 	imgurl_s := req.FormValue("url")
 	if imgurl_s != "" {
@@ -73,7 +99,6 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		_, filename := path.Split(imgurl.Path)
 		log.Printf("Downloading %s", filename)
 
-		/*
 		// GET the url:
 		img_rsp, err := http.Get(imgurl_s)
 		if err != nil {
@@ -99,12 +124,19 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 			rsp.WriteHeader(500)
 			return
 		}
-		*/
 
 		// Acquire the next sequential FileId:
 		id := newId()
 		log.Printf("%d", int(id))
 
+		// Create the symlink:
+		symlink_name := base62Encode(uint64(id)) + ".gif"
+		symlink_path := path.Join("/srv/bittwiddlers.org/i", symlink_name)
+		log.Printf("symlink %s", symlink_path)
+		os.Symlink(local_path, symlink_path)
+
+		http.Redirect(rsp, req, path.Join("/", symlink_name), 302)
+		return
 	}
 }
 
@@ -136,7 +168,7 @@ func main() {
 
 	// TODO(jsd): Make this pair of arguments a little more elegant, like "unix:/path/to/socket" or "tcp://:8080"
 	socketType, socketAddr := args[0], args[1]
-	//proxyRoot = args[2], args[3], args[4]
+	webRoot = args[2]
 
 	// Create the socket to listen on:
 	l, err := net.Listen(socketType, socketAddr)
