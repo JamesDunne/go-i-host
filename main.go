@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -135,14 +136,45 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		log.Printf("symlink %s", symlink_path)
 		os.Symlink(local_path, symlink_path)
 
-		http.Redirect(rsp, req, path.Join("/", symlink_name), 302)
+		img_url := path.Join("/", symlink_name)
+		log.Printf("%s", img_url)
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(rsp, `
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>GIF Posted!</title>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<div style="height: 100%%">
+		<img src="%s" alt="GIF" /><br />
+		<a href="%s">link</a>
+	</div>
+</body>
+</html>`, img_url, img_url)
 		return
 	}
 }
 
 func getForm(rsp http.ResponseWriter, req *http.Request) {
-	rsp.Header().Add("Content-Type", "text/html; charset=utf-8")
-	log.Printf("GET")
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	fmt.Fprintf(rsp, `
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>POST a GIF</title>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<form action="" method="POST">
+		<label for="url">URL: <input id="url" name="url" size="128" /></label>
+		<input type="submit" value="Submit" />
+	</form>
+</body>
+</html>`)
 }
 
 // handles requests to upload images and rehost with shortened URLs
