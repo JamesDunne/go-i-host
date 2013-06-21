@@ -4,7 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"path/filepath"
+	//	"ioutil"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
@@ -29,7 +32,8 @@ func removeIfStartsWith(s, start string) string {
 	return s[len(start):]
 }
 
-const base62Alphabet = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+// Shuffled "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const base62Alphabet = "krKL5Z0Uz9tiXh3lNsq1MFVmPcdIeoyB28vWGupQS7H6wOYDnJbfEgTxRAa4Cj"
 
 // base62Encode encodes a number to a base62 string representation.
 func base62Encode(num uint64) string {
@@ -53,12 +57,18 @@ func base62Encode(num uint64) string {
 	return string(arr)
 }
 
+const (
+	links_folder = "/srv/bittwiddlers.org/i-test/links"
+	store_folder = "/srv/bittwiddlers.org/i-test/store"
+)
+
 type FileId uint64
 
 func newId() FileId {
-	f, err := os.OpenFile("/srv/bittwiddlers.org/i-host/count", os.O_RDWR|os.O_CREATE, 0600)
+	count_path := path.Join(store_folder, "count")
+	f, err := os.OpenFile(count_path, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		f, err = os.Create("/srv/bittwiddlers.org/i-host/count")
+		f, err = os.Create(count_path)
 	}
 	defer f.Close()
 
@@ -82,7 +92,27 @@ func newId() FileId {
 	return FileId(id64)
 }
 
-var webRoot string
+func getForm(rsp http.ResponseWriter, req *http.Request) {
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	fmt.Fprintf(rsp, `
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>POST a GIF</title>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<div>
+		<h2>Submit an image URL</h2>
+		<form action="/add" method="POST">
+			<label for="url">URL: <input id="url" name="url" size="128" /></label><br />
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+</body>
+</html>`)
+}
 
 func postImage(rsp http.ResponseWriter, req *http.Request) {
 	imgurl_s := req.FormValue("url")
@@ -109,7 +139,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		defer img_rsp.Body.Close()
 
 		// Create a local file:
-		local_path := path.Join("/srv/bittwiddlers.org/i-host", filename)
+		local_path := path.Join(store_folder, filename)
 		log.Printf("to %s", local_path)
 
 		local_file, err := os.Create(local_path)
@@ -132,58 +162,108 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Create the symlink:
 		symlink_name := base62Encode(uint64(id)) + ".gif"
-		symlink_path := path.Join("/srv/bittwiddlers.org/i", symlink_name)
+		symlink_path := path.Join(links_folder, symlink_name)
 		log.Printf("symlink %s", symlink_path)
 		os.Symlink(local_path, symlink_path)
 
 		img_url := path.Join("/", symlink_name)
 		log.Printf("%s", img_url)
 
-		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(rsp, `
-<!DOCTYPE html>
-
-<html>
-<head>
-	<title>GIF Posted!</title>
-</head>
-<body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<div style="height: 100%%">
-		<img src="%s" alt="GIF" /><br />
-		<a href="%s">link</a>
-	</div>
-</body>
-</html>`, img_url, img_url)
-		return
+		http.Redirect(rsp, req, img_url, 302)
 	}
 }
 
-func getForm(rsp http.ResponseWriter, req *http.Request) {
-	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+// Renders a viewing HTML page for an extensionless image request
+func renderViewer(rsp http.ResponseWriter, req *http.Request) {
+	imgrelpath := req.URL.Path[1:]
 
+	bgcolor := "black"
+	if startsWith(imgrelpath, "b/") {
+		bgcolor = "black"
+		imgrelpath = req.URL.Path[3:]
+	} else if startsWith(imgrelpath, "w/") {
+		bgcolor = "white"
+		imgrelpath = req.URL.Path[3:]
+	}
+
+	// Find the image symlink to get its extension:
+	// TODO(jsd): Sanitize file path
+	matches, err := filepath.Glob(path.Join(links_folder, imgrelpath + ".*"))
+	if err != nil || len(matches) == 0 {
+		// 404 for non-existent local file:
+		log.Printf("View: 404 %s", req.URL.Path)
+		rsp.WriteHeader(404)
+		return
+	}
+
+	// Get the extension of the found file and use that as the img src URL:
+	img_url := "/" + imgrelpath + path.Ext(matches[0])
+	log.Printf("View: 200 %s", img_url)
+
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(rsp, `
 <!DOCTYPE html>
 
 <html>
 <head>
-	<title>POST a GIF</title>
+<style type="text/css">
+html, body {
+  width: 100%%;
+  height: 100%%;
+}
+html {
+  display: table;
+}
+body {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+  background-color: %s;
+  color: silver;
+}
+</style>
 </head>
-<body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<form action="" method="POST">
-		<label for="url">URL: <input id="url" name="url" size="128" /></label>
-		<input type="submit" value="Submit" />
-	</form>
+<body>
+	<div>
+		<img src="%s" alt="GIF" />
+	</div>
 </body>
-</html>`)
+</html>`, bgcolor, img_url)
+	return
 }
 
 // handles requests to upload images and rehost with shortened URLs
 func postHandler(rsp http.ResponseWriter, req *http.Request) {
-	log.Printf("Method: %s", req.Method)
-	if req.Method == "POST" {
+	log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
+	if req.Method == "POST" && req.URL.Path == "/add" {
+		// POST a new image:
 		postImage(rsp, req)
+		return
 	} else {
-		getForm(rsp, req)
+		// GET:
+
+		if req.URL.Path == "/add" {
+			// GET the /add form to add a new image:
+			getForm(rsp, req)
+			return
+		}
+
+		// Serve a GET request:
+		ext := path.Ext(req.URL.Path)
+		// 'ext' includes leading '.'
+		if ext == "" {
+			// No extension means to serve an image viewer for the image in question:
+			renderViewer(rsp, req)
+			return
+		} else {
+			// Pass request to nginx to serve static content file:
+			redirPath := "/g" + req.URL.Path
+			log.Printf("X-Accel-Redirect: %s", redirPath)
+			rsp.Header().Set("X-Accel-Redirect", redirPath)
+			rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
+			rsp.WriteHeader(200)
+			return
+		}
 	}
 }
 
@@ -191,16 +271,14 @@ func main() {
 	// Expect commandline arguments to specify:
 	//   <listen socket type> : "unix" or "tcp" type of socket to listen on
 	//   <listen address>     : network address to listen on if "tcp" or path to socket if "unix"
-	//   <web root>           : absolute path prefix on URLs
 	args := os.Args[1:]
-	if len(args) != 3 {
-		log.Fatal("Required <listen socket type> <listen address> <web root> arguments")
+	if len(args) != 2 {
+		log.Fatal("Required <listen socket type> <listen address> arguments")
 		return
 	}
 
 	// TODO(jsd): Make this pair of arguments a little more elegant, like "unix:/path/to/socket" or "tcp://:8080"
 	socketType, socketAddr := args[0], args[1]
-	webRoot = args[2]
 
 	// Create the socket to listen on:
 	l, err := net.Listen(socketType, socketAddr)
