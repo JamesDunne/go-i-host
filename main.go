@@ -18,6 +18,11 @@ import (
 	"syscall"
 )
 
+const (
+	links_folder = "/srv/bittwiddlers.org/i/links"
+	store_folder = "/srv/bittwiddlers.org/i/store"
+)
+
 func startsWith(s, start string) bool {
 	if len(s) < len(start) {
 		return false
@@ -56,11 +61,6 @@ func base62Encode(num uint64) string {
 
 	return string(arr)
 }
-
-const (
-	links_folder = "/srv/bittwiddlers.org/i-test/links"
-	store_folder = "/srv/bittwiddlers.org/i-test/store"
-)
 
 type FileId uint64
 
@@ -105,7 +105,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
 	<div>
 		<h2>Submit an image URL</h2>
-		<form action="/add" method="POST">
+		<form action="/" method="POST">
 			<label for="url">URL: <input id="url" name="url" size="128" /></label><br />
 			<input type="submit" value="Submit" />
 		</form>
@@ -161,12 +161,13 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		log.Printf("%d", int(id))
 
 		// Create the symlink:
-		symlink_name := base62Encode(uint64(id)) + ".gif"
+		img_name := base62Encode(uint64(id))
+		symlink_name := img_name + ".gif"
 		symlink_path := path.Join(links_folder, symlink_name)
 		log.Printf("symlink %s", symlink_path)
 		os.Symlink(local_path, symlink_path)
 
-		img_url := path.Join("/", symlink_name)
+		img_url := path.Join("/b/", img_name)
 		log.Printf("%s", img_url)
 
 		http.Redirect(rsp, req, img_url, 302)
@@ -235,15 +236,15 @@ body {
 // handles requests to upload images and rehost with shortened URLs
 func postHandler(rsp http.ResponseWriter, req *http.Request) {
 	log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
-	if req.Method == "POST" && req.URL.Path == "/add" {
+	if req.Method == "POST" && req.URL.Path == "/" {
 		// POST a new image:
 		postImage(rsp, req)
 		return
 	} else {
 		// GET:
 
-		if req.URL.Path == "/add" {
-			// GET the /add form to add a new image:
+		if req.URL.Path == "/" {
+			// GET the / form to add a new image:
 			getForm(rsp, req)
 			return
 		}
