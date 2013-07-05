@@ -114,6 +114,16 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 </html>`)
 }
 
+func createLink(local_path string, id FileId) (img_name string) {
+	// Create the symlink:
+	img_name = base62Encode(uint64(id))
+	symlink_name := img_name + ".gif"
+	symlink_path := path.Join(links_folder, symlink_name)
+	log.Printf("symlink %s", symlink_path)
+	os.Symlink(local_path, symlink_path)
+	return
+}
+
 func postImage(rsp http.ResponseWriter, req *http.Request) {
 	imgurl_s := req.FormValue("url")
 	if imgurl_s != "" {
@@ -161,12 +171,9 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		log.Printf("%d", int(id))
 
 		// Create the symlink:
-		img_name := base62Encode(uint64(id))
-		symlink_name := img_name + ".gif"
-		symlink_path := path.Join(links_folder, symlink_name)
-		log.Printf("symlink %s", symlink_path)
-		os.Symlink(local_path, symlink_path)
+		img_name := createLink(local_path, id)
 
+		// Redirect to the black-background viewer:
 		img_url := path.Join("/b/", img_name)
 		log.Printf("%s", img_url)
 
@@ -189,7 +196,7 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 
 	// Find the image symlink to get its extension:
 	// TODO(jsd): Sanitize file path
-	matches, err := filepath.Glob(path.Join(links_folder, imgrelpath + ".*"))
+	matches, err := filepath.Glob(path.Join(links_folder, imgrelpath+".*"))
 	if err != nil || len(matches) == 0 {
 		// 404 for non-existent local file:
 		log.Printf("View: 404 %s", req.URL.Path)
