@@ -106,7 +106,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	<div>
 		<h2>Submit an image URL</h2>
 		<form action="/" method="POST">
-			<label for="url">URL: <input id="url" name="url" size="128" /></label><br />
+			<label for="url">URL: <input id="url" name="url" size="128" autofocus="autofocus" /></label><br />
 			<input type="submit" value="Submit" />
 		</form>
 	</div>
