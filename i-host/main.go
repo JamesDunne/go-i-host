@@ -101,7 +101,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 <html>
 <head>
 	<title>POST a GIF</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
 </head>
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
 	<div>
@@ -127,7 +127,7 @@ func createLink(local_path string, id FileId) (img_name string) {
 	img_name = base62Encode(uint64(id))
 	symlink_name := img_name + ".gif"
 	symlink_path := path.Join(links_folder, symlink_name)
-	log.Printf("symlink %s", symlink_path)
+	//log.Printf("symlink %s", symlink_path)
 	os.Symlink(local_path, symlink_path)
 	return
 }
@@ -170,7 +170,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Copy upload data to a local file:
 		local_path = path.Join(store_folder, part.FileName())
-		log.Printf("Accepting upload: '%s'\n", local_path)
+		//log.Printf("Accepting upload: '%s'\n", local_path)
 
 		f, err := os.Create(local_path)
 		if err != nil {
@@ -187,7 +187,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
 		// Handle download from URL:
-		log.Printf("%s", imgurl_s)
+		//log.Printf("%s", imgurl_s)
 
 		// Parse the URL so we get the file name:
 		imgurl, err := url.Parse(imgurl_s)
@@ -198,7 +198,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Split the absolute path by dir and filename:
 		_, filename := path.Split(imgurl.Path)
-		log.Printf("Downloading %s", filename)
+		//log.Printf("Downloading %s", filename)
 
 		// GET the url:
 		img_rsp, err := http.Get(imgurl_s)
@@ -210,7 +210,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Create a local file:
 		local_path = path.Join(store_folder, filename)
-		log.Printf("to %s", local_path)
+		//log.Printf("to %s", local_path)
 
 		local_file, err := os.Create(local_path)
 		if err != nil {
@@ -229,14 +229,14 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 	// Acquire the next sequential FileId:
 	id := newId()
-	log.Printf("%d", int(id))
+	//log.Printf("%d", int(id))
 
 	// Create the symlink:
 	img_name := createLink(local_path, id)
 
 	// Redirect to the black-background viewer:
 	img_url := path.Join("/b/", img_name)
-	log.Printf("%s", img_url)
+	//log.Printf("%s", img_url)
 
 	http.Redirect(rsp, req, img_url, 302)
 }
@@ -259,14 +259,14 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 	matches, err := filepath.Glob(path.Join(links_folder, imgrelpath+".*"))
 	if err != nil || len(matches) == 0 {
 		// 404 for non-existent local file:
-		log.Printf("View: 404 %s", req.URL.Path)
+		//log.Printf("View: 404 %s", req.URL.Path)
 		rsp.WriteHeader(404)
 		return
 	}
 
 	// Get the extension of the found file and use that as the img src URL:
 	img_url := "/" + imgrelpath + path.Ext(matches[0])
-	log.Printf("View: 200 %s", img_url)
+	//log.Printf("View: 200 %s", img_url)
 
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(rsp, `
@@ -274,7 +274,7 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 
 <html>
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <style type="text/css">
 html, body {
   width: 100%%;
@@ -303,7 +303,7 @@ body {
 
 // handles requests to upload images and rehost with shortened URLs
 func postHandler(rsp http.ResponseWriter, req *http.Request) {
-	log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
+	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
 	if req.Method == "POST" && req.URL.Path == "/" {
 		// POST a new image:
 		postImage(rsp, req)
@@ -327,7 +327,7 @@ func postHandler(rsp http.ResponseWriter, req *http.Request) {
 		} else {
 			// Pass request to nginx to serve static content file:
 			redirPath := "/g" + req.URL.Path
-			log.Printf("X-Accel-Redirect: %s", redirPath)
+			//log.Printf("X-Accel-Redirect: %s", redirPath)
 			rsp.Header().Set("X-Accel-Redirect", redirPath)
 			rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
 			rsp.WriteHeader(200)
