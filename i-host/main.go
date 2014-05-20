@@ -101,13 +101,21 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 <html>
 <head>
 	<title>POST a GIF</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
 </head>
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
 	<div>
 		<h2>Submit an image URL</h2>
 		<form action="/" method="POST">
-			<label for="url">URL: <input id="url" name="url" size="128" autofocus="autofocus" /></label><br />
+			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
 			<input type="submit" value="Submit" />
+		</form>
+	</div>
+    <div>
+		<h2>Or upload an image</h2>
+		<form action="/" method="POST" enctype="multipart/form-data">
+			<label for="file"><input type="file" id="file" name="file" /></label><br />
+			<input type="submit" value="Upload" />
 		</form>
 	</div>
 </body>
@@ -124,9 +132,61 @@ func createLink(local_path string, id FileId) (img_name string) {
 	return
 }
 
+func isMultipart(r *http.Request) bool {
+	v := r.Header.Get("Content-Type")
+	if v == "" {
+		return false
+	}
+	d, _, err := mime.ParseMediaType(v)
+	if err != nil || d != "multipart/form-data" {
+		return false
+	}
+	return true
+}
+
 func postImage(rsp http.ResponseWriter, req *http.Request) {
-	imgurl_s := req.FormValue("url")
-	if imgurl_s != "" {
+	// Accept file upload from client or download from URL supplied.
+	var local_path string
+
+	if isMultipart(req) {
+		// Accept file upload:
+		reader, err := req.MultipartReader()
+		if err != nil {
+			//panic(NewHttpError(http.StatusBadRequest, "Error parsing multipart form data", err))
+			rsp.WriteHeader(500)
+			return
+		}
+
+		// Keep reading the multipart form data and handle file uploads:
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			rsp.WriteHeader(400)
+			return
+		}
+		if part.FileName() == "" {
+			rsp.WriteHeader(400)
+			return
+		}
+
+		// Copy upload data to a local file:
+		local_path = path.Join(store_folder, part.FileName())
+		log.Printf("Accepting upload: '%s'\n", local_path)
+
+		f, err := os.Create(local_path)
+		if err != nil {
+			//panic(NewHttpError(http.StatusInternalServerError, "Could not accept upload", fmt.Errorf("Could not create local file '%s'; %s", local_path, err.Error())))
+			rsp.WriteHeader(500)
+			return
+		}
+		defer f.Close()
+
+		if _, err := io.Copy(f, part); err != nil {
+			//panic(NewHttpError(http.StatusInternalServerError, "Could not write upload data to local file", fmt.Errorf("Could not write to local file '%s'; %s", local_path, err)))
+			rsp.WriteHeader(500)
+			return
+		}
+	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
+		// Handle download from URL:
 		log.Printf("%s", imgurl_s)
 
 		// Parse the URL so we get the file name:
@@ -149,7 +209,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		defer img_rsp.Body.Close()
 
 		// Create a local file:
-		local_path := path.Join(store_folder, filename)
+		local_path = path.Join(store_folder, filename)
 		log.Printf("to %s", local_path)
 
 		local_file, err := os.Create(local_path)
@@ -165,20 +225,20 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 			rsp.WriteHeader(500)
 			return
 		}
-
-		// Acquire the next sequential FileId:
-		id := newId()
-		log.Printf("%d", int(id))
-
-		// Create the symlink:
-		img_name := createLink(local_path, id)
-
-		// Redirect to the black-background viewer:
-		img_url := path.Join("/b/", img_name)
-		log.Printf("%s", img_url)
-
-		http.Redirect(rsp, req, img_url, 302)
 	}
+
+	// Acquire the next sequential FileId:
+	id := newId()
+	log.Printf("%d", int(id))
+
+	// Create the symlink:
+	img_name := createLink(local_path, id)
+
+	// Redirect to the black-background viewer:
+	img_url := path.Join("/b/", img_name)
+	log.Printf("%s", img_url)
+
+	http.Redirect(rsp, req, img_url, 302)
 }
 
 // Renders a viewing HTML page for an extensionless image request
@@ -214,7 +274,8 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 
 <html>
 <head>
-<style type="text/css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"/>
+    <style type="text/css">
 html, body {
   width: 100%%;
   height: 100%%;
@@ -229,7 +290,7 @@ body {
   background-color: %s;
   color: silver;
 }
-</style>
+    </style>
 </head>
 <body>
 	<div>
