@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"path/filepath"
-	//	"ioutil"
 	"log"
 	"mime"
 	"net"
@@ -15,52 +13,18 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
+// FIXME(jsd): Hard-coded system paths here!
 const (
-	links_folder = "/srv/bittwiddlers.org/i/links"
-	store_folder = "/srv/bittwiddlers.org/i/store"
+	base_folder  = "/srv/bittwiddlers.org/i"
+	db_path      = base_folder + "/sqlite.db"
+	links_folder = base_folder + "/links"
+	store_folder = base_folder + "/store"
+	thumb_folder = base_folder + "/thumb"
 )
-
-func startsWith(s, start string) bool {
-	if len(s) < len(start) {
-		return false
-	}
-	return s[0:len(start)] == start
-}
-
-func removeIfStartsWith(s, start string) string {
-	if !startsWith(s, start) {
-		return s
-	}
-	return s[len(start):]
-}
-
-// Shuffled "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const base62Alphabet = "krKL5Z0Uz9tiXh3lNsq1MFVmPcdIeoyB28vWGupQS7H6wOYDnJbfEgTxRAa4Cj"
-
-// base62Encode encodes a number to a base62 string representation.
-func base62Encode(num uint64) string {
-	if num == 0 {
-		return "0"
-	}
-
-	arr := []uint8{}
-	base := uint64(len(base62Alphabet))
-
-	for num > 0 {
-		rem := num % base
-		num = num / base
-		arr = append(arr, base62Alphabet[rem])
-	}
-
-	for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
-		arr[i], arr[j] = arr[j], arr[i]
-	}
-
-	return string(arr)
-}
 
 type FileId uint64
 
@@ -122,12 +86,11 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 </html>`)
 }
 
-func createLink(local_path string, id FileId) (img_name string) {
+func createLink(local_path string, id int64) (img_name string) {
 	// Create the symlink:
-	img_name = base62Encode(uint64(id))
+	img_name = base62Encode(id)
 	symlink_name := img_name + ".gif"
 	symlink_path := path.Join(links_folder, symlink_name)
-	//log.Printf("symlink %s", symlink_path)
 	os.Symlink(local_path, symlink_path)
 	return
 }
@@ -227,18 +190,26 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// Acquire the next sequential FileId:
-	id := newId()
-	//log.Printf("%d", int(id))
+	// Create an Image record:
+	api, err := NewAPI()
+	if err != nil {
+		rsp.WriteHeader(500)
+		return
+	}
+	defer api.Close()
+
+	id, err := api.NewImage(local_path, "TODO")
+	if err != nil {
+		rsp.WriteHeader(500)
+		return
+	}
 
 	// Create the symlink:
 	img_name := createLink(local_path, id)
 
 	// Redirect to the black-background viewer:
-	img_url := path.Join("/b/", img_name)
-	//log.Printf("%s", img_url)
-
-	http.Redirect(rsp, req, img_url, 302)
+	redir_url := path.Join("/b/", img_name)
+	http.Redirect(rsp, req, redir_url, 302)
 }
 
 // Renders a viewing HTML page for an extensionless image request
@@ -246,27 +217,32 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 	imgrelpath := req.URL.Path[1:]
 
 	bgcolor := "black"
-	if startsWith(imgrelpath, "b/") {
+	if strings.HasPrefix(imgrelpath, "b/") {
 		bgcolor = "black"
 		imgrelpath = req.URL.Path[3:]
-	} else if startsWith(imgrelpath, "w/") {
+	} else if strings.HasPrefix(imgrelpath, "w/") {
 		bgcolor = "white"
 		imgrelpath = req.URL.Path[3:]
 	}
 
-	// Find the image symlink to get its extension:
-	// TODO(jsd): Sanitize file path
-	matches, err := filepath.Glob(path.Join(links_folder, imgrelpath+".*"))
-	if err != nil || len(matches) == 0 {
-		// 404 for non-existent local file:
-		//log.Printf("View: 404 %s", req.URL.Path)
+	id := base62Decode(imgrelpath)
+	api, err := NewAPI()
+	if err != nil {
+		rsp.WriteHeader(500)
+		return
+	}
+	defer api.Close()
+
+	_, err = api.GetImage(id)
+	if err != nil {
 		rsp.WriteHeader(404)
 		return
 	}
 
+	//img.ImagePath
+
 	// Get the extension of the found file and use that as the img src URL:
-	img_url := "/" + imgrelpath + path.Ext(matches[0])
-	//log.Printf("View: 200 %s", img_url)
+	img_url := "/" + imgrelpath + ".gif"
 
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(rsp, `
