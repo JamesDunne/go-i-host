@@ -10,6 +10,4 @@ func Test_api(t *testing.T) {
 	}
 
 	defer api.Close()
-
-	api.NewImage("")
 }

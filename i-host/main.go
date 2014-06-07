@@ -30,6 +30,8 @@ const (
 	thumb_folder = base_folder + "/thumb"
 )
 
+const nginxAccelRedirect = false
+
 func isMultipart(r *http.Request) bool {
 	v := r.Header.Get("Content-Type")
 	if v == "" {
@@ -40,6 +42,18 @@ func isMultipart(r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func imageKindTo(imageKind string) (ext, mimeType string) {
+	switch imageKind {
+	case "jpeg":
+		return "image/jpeg", ".jpg"
+	case "png":
+		return "image/png", ".png"
+	case "gif":
+		return "image/gif", ".gif"
+	}
+	return "", ""
 }
 
 func postImage(rsp http.ResponseWriter, req *http.Request) {
@@ -154,20 +168,23 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	var mimeType, ext string
+	var ext string
 	var encoder func(w io.Writer, m image.Image) error
+
+	_, ext = imageKindTo(imageKind)
+
 	switch imageKind {
 	case "jpeg":
-		mimeType, ext, encoder = "image/jpeg", ".jpg", func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{}) }
+		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{}) }
 	case "png":
-		mimeType, ext, encoder = "image/png", ".png", png.Encode
+		encoder = png.Encode
 	case "gif":
 		// TODO(jsd): Might want to rethink making GIF thumbnails.
-		mimeType, ext, encoder = "image/gif", ".gif", func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
+		encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
 	}
 
 	// Create the DB record:
-	id, err := api.NewImage(Image{MimeType: mimeType, Title: "TODO"})
+	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
 	if err != nil {
 		rsp.WriteHeader(500)
 		return
@@ -289,13 +306,39 @@ func postHandler(rsp http.ResponseWriter, req *http.Request) {
 			renderViewer(rsp, req)
 			return
 		} else {
-			// Pass request to nginx to serve static content file:
-			redirPath := "/g" + req.URL.Path
-			//log.Printf("X-Accel-Redirect: %s", redirPath)
-			rsp.Header().Set("X-Accel-Redirect", redirPath)
-			rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
-			rsp.WriteHeader(200)
-			return
+			if nginxAccelRedirect {
+				// Pass request to nginx to serve static content file:
+				redirPath := "/g" + req.URL.Path
+				//log.Printf("X-Accel-Redirect: %s", redirPath)
+				rsp.Header().Set("X-Accel-Redirect", redirPath)
+				rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
+				rsp.WriteHeader(200)
+				return
+			} else {
+				// Look up the GIF by base62 encoded ID:
+				id := base62Decode(path.Base(req.URL.Path))
+				api, err := NewAPI()
+				if err != nil {
+					rsp.WriteHeader(500)
+					return
+				}
+				img, err := api.GetImage(id)
+				if err != nil {
+					rsp.WriteHeader(500)
+					return
+				}
+
+				// Determine mime-type and file extension:
+				mime, ext := imageKindTo(img.Kind)
+
+				img_name := base62Encode(id) + ext
+				local_path := path.Join(store_folder, img_name)
+
+				rsp.Header().Set("Content-Type", mime)
+				http.ServeFile(rsp, req, local_path)
+				rsp.WriteHeader(200)
+				return
+			}
 		}
 	}
 }

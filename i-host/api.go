@@ -46,9 +46,9 @@ func (api *API) Close() {
 }
 
 type Image struct {
-	ID       int64  `db:"ID"`
-	MimeType string `db:"MimeType"`
-	Title    string `db:"Title"`
+	ID    int64  `db:"ID"`
+	Kind  string `db:"Kind"`
+	Title string `db:"Title"`
 }
 
 func (api *API) NewImage(img Image) (int64, error) {
@@ -56,12 +56,12 @@ func (api *API) NewImage(img Image) (int64, error) {
 	var args []interface{}
 	if img.ID <= 0 {
 		// Insert a new record:
-		query = `insert into Image (MimeType, Title) values (?1, ?2)`
-		args = []interface{}{img.MimeType, img.Title}
+		query = `insert into Image (Kind, Title) values (?1, ?2)`
+		args = []interface{}{img.Kind, img.Title}
 	} else {
 		// Do an identity insert:
-		query = `insert into Image (ID, MimeType, Title) values (?1, ?2, ?3)`
-		args = []interface{}{img.ID, img.MimeType, img.Title}
+		query = `insert into Image (ID, Kind, Title) values (?1, ?2, ?3)`
+		args = []interface{}{img.ID, img.Kind, img.Title}
 	}
 
 	res, err := api.db.Exec(query, args...)
@@ -79,14 +79,14 @@ func (api *API) NewImage(img Image) (int64, error) {
 }
 
 func (api *API) GetImage(id int64) (img Image, err error) {
-	err = api.db.Get(&img, `select ID, MimeType, Title from Image where ID = ?1`, id)
+	err = api.db.Get(&img, `select ID, Kind, Title from Image where ID = ?1`, id)
 	return
 }
 
 func (api *API) GetList() (imgs []Image, err error) {
 	imgs = make([]Image, 0, 200)
 
-	err = api.db.Select(&imgs, `select ID, MimeType, Title from Image order by Title ASC`)
+	err = api.db.Select(&imgs, `select ID, Kind, Title from Image order by Title ASC`)
 
 	return
 }
