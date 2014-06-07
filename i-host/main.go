@@ -22,6 +22,7 @@ import (
 )
 
 import "github.com/JamesDunne/go-util/fs/notify"
+import "github.com/JamesDunne/i-host/base62"
 
 // FIXME(jsd): Hard-coded system paths here!
 const (
@@ -39,6 +40,7 @@ const nginxAccelRedirect = false
 const thumbnail_dimensions = 200
 
 var uiTmpl *template.Template
+var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
 
 func isMultipart(r *http.Request) bool {
 	v := r.Header.Get("Content-Type")
@@ -208,7 +210,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	// Rename the file:
-	img_name := base62Encode(10000 + id)
+	img_name := b62.Encode(10000 + id)
 	if err := os.Rename(local_path, path.Join(store_folder, img_name+ext)); webErrorIf(rsp, err, 500) {
 		return
 	}
@@ -290,7 +292,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		for _, img := range list {
 			_, ext := imageKindTo(img.Kind)
 			model.List = append(model.List, ImageListItem{
-				Base62ID:  base62Encode(img.ID + 10000),
+				Base62ID:  b62.Encode(img.ID + 10000),
 				Extension: ext,
 				Title:     img.Title,
 			})
@@ -317,7 +319,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	filename := path.Base(req.URL.Path)
 	filename = filename[0 : len(filename)-len(path.Ext(req.URL.Path))]
 
-	id := base62Decode(filename) - 10000
+	id := b62.Decode(filename) - 10000
 
 	api, err := NewAPI()
 	if webErrorIf(rsp, err, 500) {
@@ -337,7 +339,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	mime, ext := imageKindTo(img.Kind)
 
 	// Find the image file:
-	base62ID := base62Encode(id + 10000)
+	base62ID := b62.Encode(id + 10000)
 	img_name := base62ID + ext
 
 	if dir == "/b" || dir == "/w" {
