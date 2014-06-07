@@ -33,9 +33,8 @@ func NewAPI() (api *API, err error) {
 	api.ddl(`
 create table if not exists Image (
 	ID INTEGER PRIMARY KEY AUTOINCREMENT,
-	MimeType TEXT NOT NULL,
-	Title TEXT NOT NULL,
-	CONSTRAINT PK_Image PRIMARY KEY (ID ASC)
+	Kind TEXT NOT NULL,
+	Title TEXT NOT NULL
 )`)
 
 	return

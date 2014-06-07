@@ -29,6 +29,8 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 		boximg = img.SubImage(srcBounds)
 	case *image.YCbCr:
 		boximg = img.SubImage(srcBounds)
+	case *image.Paletted:
+		boximg = img.SubImage(srcBounds)
 	}
 
 	//log.Printf("'%s': resized to %v\n", filename, boximg.Bounds())

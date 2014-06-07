@@ -24,10 +24,12 @@ import (
 
 // FIXME(jsd): Hard-coded system paths here!
 const (
-	base_folder  = "/srv/bittwiddlers.org/i"
+	//base_folder  = "/srv/bittwiddlers.org/i"
+	base_folder  = "."
 	db_path      = base_folder + "/sqlite.db"
 	store_folder = base_folder + "/store"
 	thumb_folder = base_folder + "/thumb"
+	tmp_folder   = base_folder + "/tmp"
 )
 
 const nginxAccelRedirect = false
@@ -66,6 +68,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			//panic(NewHttpError(http.StatusBadRequest, "Error parsing multipart form data", err))
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 
@@ -81,13 +84,14 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		// Copy upload data to a local file:
-		local_path = path.Join(store_folder, part.FileName())
+		local_path = path.Join(tmp_folder, part.FileName())
 		//log.Printf("Accepting upload: '%s'\n", local_path)
 
 		f, err := os.Create(local_path)
 		if err != nil {
 			//panic(NewHttpError(http.StatusInternalServerError, "Could not accept upload", fmt.Errorf("Could not create local file '%s'; %s", local_path, err.Error())))
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 		defer f.Close()
@@ -95,6 +99,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		if _, err := io.Copy(f, part); err != nil {
 			//panic(NewHttpError(http.StatusInternalServerError, "Could not write upload data to local file", fmt.Errorf("Could not write to local file '%s'; %s", local_path, err)))
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
@@ -105,6 +110,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		imgurl, err := url.Parse(imgurl_s)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 
@@ -116,17 +122,19 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		img_rsp, err := http.Get(imgurl_s)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 		defer img_rsp.Body.Close()
 
 		// Create a local file:
-		local_path = path.Join(store_folder, filename)
+		local_path = path.Join(tmp_folder, filename)
 		//log.Printf("to %s", local_path)
 
 		local_file, err := os.Create(local_path)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 		defer local_file.Close()
@@ -135,14 +143,16 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		_, err = io.Copy(local_file, img_rsp.Body)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 	}
 
-	// Create an Image record:
+	// Open the database:
 	api, err := NewAPI()
 	if err != nil {
 		rsp.WriteHeader(500)
+		rsp.Write([]byte(err.Error()))
 		return
 	}
 	defer api.Close()
@@ -155,6 +165,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		imf, err := os.Open(local_path)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 		defer imf.Close()
@@ -187,19 +198,25 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
 	if err != nil {
 		rsp.WriteHeader(500)
+		rsp.Write([]byte(err.Error()))
 		return
 	}
 
 	// Rename the file:
-	img_name := base62Encode(id) + ext
-	os.Rename(local_path, path.Join(path.Dir(local_path), img_name))
+	img_name := base62Encode(10000 + id)
+	if err := os.Rename(local_path, path.Join(store_folder, img_name+ext)); err != nil {
+		rsp.WriteHeader(500)
+		rsp.Write([]byte(err.Error()))
+		return
+	}
 
 	// Generate the thumbnail:
 	{
 		thumbImg := makeThumbnail(firstImage, 200)
-		tf, err := os.Create(path.Join(thumb_folder, img_name))
+		tf, err := os.Create(path.Join(thumb_folder, img_name+ext))
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 		defer tf.Close()
@@ -208,6 +225,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		err = encoder(tf, thumbImg)
 		if err != nil {
 			rsp.WriteHeader(500)
+			rsp.Write([]byte(err.Error()))
 			return
 		}
 	}
@@ -230,24 +248,25 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 		imgrelpath = req.URL.Path[3:]
 	}
 
-	id := base62Decode(imgrelpath)
+	id := base62Decode(imgrelpath) - 10000
 	api, err := NewAPI()
 	if err != nil {
 		rsp.WriteHeader(500)
+		rsp.Write([]byte(err.Error()))
 		return
 	}
 	defer api.Close()
 
-	_, err = api.GetImage(id)
+	img, err := api.GetImage(id)
 	if err != nil {
 		rsp.WriteHeader(404)
+		rsp.Write([]byte(err.Error()))
 		return
 	}
 
-	//img.ImagePath
-
 	// Get the extension of the found file and use that as the img src URL:
-	img_url := "/" + imgrelpath + ".gif"
+	_, ext := imageKindTo(img.Kind)
+	img_name := base62Encode(id+10000) + ext
 
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(rsp, `
@@ -256,7 +275,16 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <style type="text/css">
+    <meta property="og:site_name" content="i.bittwiddlers.org"/>
+    <meta property="og:title" content="%[3]s"/>
+    <meta property="og:description" content=""/>
+    <meta property="og:image" content="/t/%[2]s">
+    <meta property="og:url" content="http://i.bittwiddlers.org/%[2]s">
+    <meta property="og:type" content="video.other"/>
+
+    <title>%[3]s</title>
+
+<style type="text/css">
 html, body {
   width: 100%%;
   height: 100%%;
@@ -268,79 +296,16 @@ body {
   display: table-cell;
   vertical-align: middle;
   text-align: center;
-  background-color: %s;
+  background-color: %[1]s;
   color: silver;
 }
-    </style>
+</style>
 </head>
 <body>
-	<div>
-		<img src="%s" alt="GIF" />
-	</div>
+	<div><img src="/%[2]s" alt="%[3]s" title="%[3]s" /></div>
 </body>
-</html>`, bgcolor, img_url)
+</html>`, bgcolor, img_name, img.Title)
 	return
-}
-
-// handles requests to upload images and rehost with shortened URLs
-func postHandler(rsp http.ResponseWriter, req *http.Request) {
-	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
-	if req.Method == "POST" && req.URL.Path == "/" {
-		// POST a new image:
-		postImage(rsp, req)
-		return
-	} else {
-		// GET:
-
-		if req.URL.Path == "/" {
-			// GET the / form to add a new image:
-			getForm(rsp, req)
-			return
-		}
-
-		// Serve a GET request:
-		ext := path.Ext(req.URL.Path)
-		// 'ext' includes leading '.'
-		if ext == "" {
-			// No extension means to serve an image viewer for the image in question:
-			renderViewer(rsp, req)
-			return
-		} else {
-			if nginxAccelRedirect {
-				// Pass request to nginx to serve static content file:
-				redirPath := "/g" + req.URL.Path
-				//log.Printf("X-Accel-Redirect: %s", redirPath)
-				rsp.Header().Set("X-Accel-Redirect", redirPath)
-				rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
-				rsp.WriteHeader(200)
-				return
-			} else {
-				// Look up the GIF by base62 encoded ID:
-				id := base62Decode(path.Base(req.URL.Path))
-				api, err := NewAPI()
-				if err != nil {
-					rsp.WriteHeader(500)
-					return
-				}
-				img, err := api.GetImage(id)
-				if err != nil {
-					rsp.WriteHeader(500)
-					return
-				}
-
-				// Determine mime-type and file extension:
-				mime, ext := imageKindTo(img.Kind)
-
-				img_name := base62Encode(id) + ext
-				local_path := path.Join(store_folder, img_name)
-
-				rsp.Header().Set("Content-Type", mime)
-				http.ServeFile(rsp, req, local_path)
-				rsp.WriteHeader(200)
-				return
-			}
-		}
-	}
 }
 
 func getForm(rsp http.ResponseWriter, req *http.Request) {
@@ -351,7 +316,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 
 <html>
 <head>
-	<title>POST a GIF</title>
+	<title>POST an Image</title>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 </head>
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
@@ -371,6 +336,72 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	</div>
 </body>
 </html>`)
+}
+
+// handles requests to upload images and rehost with shortened URLs
+func requestHandler(rsp http.ResponseWriter, req *http.Request) {
+	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
+	if req.Method == "POST" {
+		// POST:
+
+		if req.URL.Path == "/" {
+			// POST a new image:
+			postImage(rsp, req)
+			return
+		}
+		return
+	}
+
+	// GET:
+	if req.URL.Path == "/" {
+		// GET the / form to add a new image:
+		getForm(rsp, req)
+		return
+	}
+
+	// Serve a GET request:
+	ext := path.Ext(req.URL.Path)
+	// 'ext' includes leading '.'
+	if ext == "" {
+		// No extension means to serve an image viewer for the image in question:
+		renderViewer(rsp, req)
+		return
+	} else {
+		if nginxAccelRedirect {
+			// Pass request to nginx to serve static content file:
+			redirPath := "/g" + req.URL.Path
+			//log.Printf("X-Accel-Redirect: %s", redirPath)
+			rsp.Header().Set("X-Accel-Redirect", redirPath)
+			rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
+			rsp.WriteHeader(200)
+			return
+		} else {
+			// Look up the GIF by base62 encoded ID:
+			id := base62Decode(path.Base(req.URL.Path))
+			api, err := NewAPI()
+			if err != nil {
+				rsp.WriteHeader(500)
+				return
+			}
+			img, err := api.GetImage(id)
+			if err != nil {
+				rsp.WriteHeader(500)
+				return
+			}
+
+			// Determine mime-type and file extension:
+			mime, ext := imageKindTo(img.Kind)
+
+			// Find the image file:
+			img_name := base62Encode(id+10000) + ext
+			local_path := path.Join(store_folder, img_name)
+
+			// Serve it with the proper mime-type:
+			rsp.Header().Set("Content-Type", mime)
+			http.ServeFile(rsp, req, local_path)
+			return
+		}
+	}
 }
 
 func main() {
@@ -413,5 +444,5 @@ func main() {
 	}(sigc)
 
 	// Start the HTTP server:
-	log.Fatal(http.Serve(l, http.HandlerFunc(postHandler)))
+	log.Fatal(http.Serve(l, http.HandlerFunc(requestHandler)))
 }

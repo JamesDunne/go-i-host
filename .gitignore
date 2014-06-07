@@ -1,3 +1,6 @@
 *.exe
 /i-host/i-host
+/i-host/thumb
+/i-host/tmp
+/i-host/store
 /linknew/linknew
