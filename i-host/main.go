@@ -17,7 +17,7 @@ import (
 
 import (
 	"image"
-	"image/gif"
+	_ "image/gif"
 	"image/jpeg"
 	"image/png"
 )
@@ -55,16 +55,16 @@ func isMultipart(r *http.Request) bool {
 	return true
 }
 
-func imageKindTo(imageKind string) (ext, mimeType string) {
+func imageKindTo(imageKind string) (ext, thumbExt, mimeType string) {
 	switch imageKind {
 	case "jpeg":
-		return "image/jpeg", ".jpg"
+		return "image/jpeg", ".jpg", ".jpg"
 	case "png":
-		return "image/png", ".png"
+		return "image/png", ".png", ".png"
 	case "gif":
-		return "image/gif", ".gif"
+		return "image/gif", ".gif", ".png"
 	}
-	return "", ""
+	return "", "", ""
 }
 
 func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
@@ -102,6 +102,10 @@ func ensureThumbnail(image_path, thumb_path string) error {
 }
 
 func generateThumbnail(firstImage image.Image, imageKind string, thumb_path string) error {
+	if firstImage == nil {
+		return fmt.Errorf("Cannot generate thumbnail with nil image")
+	}
+
 	var encoder func(w io.Writer, m image.Image) error
 	switch imageKind {
 	case "jpeg":
@@ -110,7 +114,8 @@ func generateThumbnail(firstImage image.Image, imageKind string, thumb_path stri
 		encoder = png.Encode
 	case "gif":
 		// TODO(jsd): Might want to rethink making GIF thumbnails.
-		encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
+		//encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
+		encoder = png.Encode
 	}
 
 	// Generate the thumbnail image:
@@ -245,7 +250,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	_, ext := imageKindTo(imageKind)
+	_, ext, thumbExt := imageKindTo(imageKind)
 
 	// Create the DB record:
 	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
@@ -254,19 +259,20 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	// Rename the file:
-	img_name := b62.Encode(10000 + id)
-	if err := os.Rename(local_path, path.Join(store_folder, img_name+ext)); webErrorIf(rsp, err, 500) {
+	img_name := fmt.Sprintf("%d", id)
+	store_path := path.Join(store_folder, img_name+ext)
+	if err := os.Rename(local_path, store_path); webErrorIf(rsp, err, 500) {
 		return
 	}
 
 	// Generate a thumbnail:
-	thumb_path := path.Join(thumb_folder, img_name+ext)
+	thumb_path := path.Join(thumb_folder, img_name+thumbExt)
 	if err := generateThumbnail(firstImage, imageKind, thumb_path); webErrorIf(rsp, err, 500) {
 		return
 	}
 
 	// Redirect to the black-background viewer:
-	redir_url := path.Join("/b/", img_name)
+	redir_url := path.Join("/b/", b62.Encode(id+10000))
 	http.Redirect(rsp, req, redir_url, 302)
 }
 
@@ -275,9 +281,10 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 }
 
 type ImageListItem struct {
-	Base62ID  string
-	Extension string
-	Title     string
+	Base62ID       string
+	Extension      string
+	ThumbExtension string
+	Title          string
 }
 
 // handles requests to upload images and rehost with shortened URLs
@@ -320,11 +327,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			List: make([]ImageListItem, 0, len(list)),
 		}
 		for _, img := range list {
-			_, ext := imageKindTo(img.Kind)
+			_, ext, thumbExt := imageKindTo(img.Kind)
 			model.List = append(model.List, ImageListItem{
-				Base62ID:  b62.Encode(img.ID + 10000),
-				Extension: ext,
-				Title:     img.Title,
+				Base62ID:       b62.Encode(img.ID + 10000),
+				Extension:      ext,
+				ThumbExtension: thumbExt,
+				Title:          img.Title,
 			})
 		}
 
@@ -366,11 +374,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	// Determine mime-type and file extension:
-	mime, ext := imageKindTo(img.Kind)
+	mime, ext, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
 	base62ID := b62.Encode(id + 10000)
-	img_name := fmt.Sprintf("%d", id) + ext
+	img_name := fmt.Sprintf("%d", id)
 
 	if dir == "/b" || dir == "/w" {
 		// Render a black or white BG centered image viewer:
@@ -402,9 +410,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	} else if dir == "/t" {
 		// Serve thumbnail file:
-		local_path := path.Join(store_folder, img_name)
-		thumb_path := path.Join(thumb_folder, img_name)
-		ensureThumbnail(local_path, thumb_path)
+		local_path := path.Join(store_folder, img_name+ext)
+		thumb_path := path.Join(thumb_folder, img_name+thumbExt)
+		if err := ensureThumbnail(local_path, thumb_path); webErrorIf(rsp, err, 500) {
+			return
+		}
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, thumb_path)
@@ -414,7 +424,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	// Serve actual image contents:
 	if nginxAccelRedirect {
 		// Pass request to nginx to serve static content file:
-		redirPath := "/g/" + img_name
+		redirPath := "/g/" + img_name + ext
 
 		//log.Printf("X-Accel-Redirect: %s", redirPath)
 		rsp.Header().Set("X-Accel-Redirect", redirPath)
@@ -423,7 +433,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	} else {
 		// Serve content directly with the proper mime-type:
-		local_path := path.Join(store_folder, img_name)
+		local_path := path.Join(store_folder, img_name+ext)
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, local_path)

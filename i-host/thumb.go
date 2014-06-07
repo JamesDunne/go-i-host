@@ -1,6 +1,10 @@
 package main
 
-import "image"
+import (
+	"fmt"
+	"image"
+	"reflect"
+)
 import "github.com/JamesDunne/go-util/imaging/resize"
 
 func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
@@ -24,13 +28,29 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 
 	// Cut out the center square to a new image:
 	var boximg image.Image
-	switch img := img.(type) {
+	switch si := img.(type) {
 	case *image.RGBA:
-		boximg = img.SubImage(srcBounds)
+		boximg = si.SubImage(srcBounds)
 	case *image.YCbCr:
-		boximg = img.SubImage(srcBounds)
+		boximg = si.SubImage(srcBounds)
 	case *image.Paletted:
-		boximg = img.SubImage(srcBounds)
+		boximg = si.SubImage(srcBounds)
+	case *image.RGBA64:
+		panic(fmt.Errorf("Unhandled image format type: %s", "RGBA64"))
+	case *image.NRGBA:
+		boximg = si.SubImage(srcBounds)
+	case *image.NRGBA64:
+		panic(fmt.Errorf("Unhandled image format type: %s", "NRGBA64"))
+	case *image.Alpha:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha"))
+	case *image.Alpha16:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha16"))
+	case *image.Gray:
+		boximg = si.SubImage(srcBounds)
+	case *image.Gray16:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Gray16"))
+	default:
+		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
 	}
 
 	//log.Printf("'%s': resized to %v\n", filename, boximg.Bounds())
