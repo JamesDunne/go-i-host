@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strings"
 	"syscall"
 )
 
@@ -187,7 +186,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 	switch imageKind {
 	case "jpeg":
-		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{}) }
+		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{Quality: 100}) }
 	case "png":
 		encoder = png.Encode
 	case "gif":
@@ -232,32 +231,134 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	http.Redirect(rsp, req, redir_url, 302)
 }
 
-// Renders a viewing HTML page for an extensionless image request
-func renderViewer(rsp http.ResponseWriter, req *http.Request) {
-	imgrelpath := req.URL.Path[1:]
+func getForm(rsp http.ResponseWriter, req *http.Request) {
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	bgcolor := "black"
-	if strings.HasPrefix(imgrelpath, "b/") {
-		bgcolor = "black"
-		imgrelpath = req.URL.Path[3:]
-	} else if strings.HasPrefix(imgrelpath, "w/") {
-		bgcolor = "white"
-		imgrelpath = req.URL.Path[3:]
+	fmt.Fprintf(rsp, `
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>POST an Image</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<div>
+		<h2>Submit an image URL</h2>
+		<form action="/new" method="POST">
+			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+    <div>
+		<h2>Or upload an image</h2>
+		<form action="/new" method="POST" enctype="multipart/form-data">
+			<label for="file"><input type="file" id="file" name="file" /></label><br />
+			<input type="submit" value="Upload" />
+		</form>
+	</div>
+</body>
+</html>`)
+}
+
+// handles requests to upload images and rehost with shortened URLs
+func requestHandler(rsp http.ResponseWriter, req *http.Request) {
+	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
+	if req.Method == "POST" {
+		// POST:
+
+		if req.URL.Path == "/new" {
+			// POST a new image:
+			postImage(rsp, req)
+			return
+		}
+
+		rsp.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
-	id := base62Decode(imgrelpath) - 10000
+	// GET:
+	if req.URL.Path == "/favicon.ico" {
+		rsp.WriteHeader(http.StatusNoContent)
+		return
+	} else if req.URL.Path == "/" {
+		// Render a list page:
+		api, err := NewAPI()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+		defer api.Close()
+
+		list, err := api.GetList()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		rsp.Write([]byte(`
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Listing</title>
+
+<style type="text/css">
+html, body {
+  width: 100%;
+  height: 100%;
+}
+html {
+  display: table;
+}
+body {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: left;
+  background-color: black;
+  color: silver;
+}
+li {
+  list-style-type: none;
+}
+</style>
+</head>
+<body>
+    <div>
+        <ul>`))
+		for _, img := range list {
+			_, ext := imageKindTo(img.Kind)
+			// TODO(jsd): HTML encoding!
+			rsp.Write([]byte(fmt.Sprintf(`<li><a href="/b/%[1]s"><img src="/t/%[1]s%[2]s" alt="%[3]s" title="%[3]s" /></a></li>`+"\n", base62Encode(img.ID+10000), ext, img.Title)))
+		}
+		rsp.Write([]byte(`
+        </ul>
+    </div>
+</body>
+</html>`))
+		return
+	} else if req.URL.Path == "/new" {
+		// GET the / form to add a new image:
+		getForm(rsp, req)
+		return
+	}
+
+	dir := path.Dir(req.URL.Path)
+
+	// Look up the image's record by base62 encoded ID:
+	filename := path.Base(req.URL.Path)
+	filename = filename[0 : len(filename)-len(path.Ext(req.URL.Path))]
+
+	id := base62Decode(filename) - 10000
+
 	api, err := NewAPI()
-	if err != nil {
-		rsp.WriteHeader(500)
-		rsp.Write([]byte(err.Error()))
+	if webErrorIf(rsp, err, 500) {
 		return
 	}
 	defer api.Close()
-
 	img, err := api.GetImage(id)
-	if err != nil {
-		rsp.WriteHeader(500)
-		rsp.Write([]byte(err.Error()))
+	if webErrorIf(rsp, err, 500) {
 		return
 	}
 	if img == nil {
@@ -265,12 +366,24 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get the extension of the found file and use that as the img src URL:
-	_, ext := imageKindTo(img.Kind)
+	// Determine mime-type and file extension:
+	mime, ext := imageKindTo(img.Kind)
+
+	// Find the image file:
 	img_name := base62Encode(id+10000) + ext
 
-	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(rsp, `
+	if dir == "/b" || dir == "/w" {
+		// Render a black or white BG centered image viewer:
+		var bgcolor string
+		switch dir {
+		case "/b":
+			bgcolor = "black"
+		case "/w":
+			bgcolor = "white"
+		}
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(rsp, `
 <!DOCTYPE html>
 
 <html>
@@ -306,153 +419,9 @@ body {
 	<div><img src="/%[2]s" alt="%[3]s" title="%[3]s" /></div>
 </body>
 </html>`, bgcolor, img_name, img.Title)
-	// TODO(jsd): HTML encoding!
-
-	return
-}
-
-func getForm(rsp http.ResponseWriter, req *http.Request) {
-	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	fmt.Fprintf(rsp, `
-<!DOCTYPE html>
-
-<html>
-<head>
-	<title>POST an Image</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-</head>
-<body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<div>
-		<h2>Submit an image URL</h2>
-		<form action="/" method="POST">
-			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
-			<input type="submit" value="Submit" />
-		</form>
-	</div>
-    <div>
-		<h2>Or upload an image</h2>
-		<form action="/" method="POST" enctype="multipart/form-data">
-			<label for="file"><input type="file" id="file" name="file" /></label><br />
-			<input type="submit" value="Upload" />
-		</form>
-	</div>
-</body>
-</html>`)
-}
-
-// handles requests to upload images and rehost with shortened URLs
-func requestHandler(rsp http.ResponseWriter, req *http.Request) {
-	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
-	if req.Method == "POST" {
-		// POST:
-
-		if req.URL.Path == "/" {
-			// POST a new image:
-			postImage(rsp, req)
-			return
-		}
+		// TODO(jsd): HTML encoding!
 		return
-	}
-
-	// GET:
-	if req.URL.Path == "/" {
-		// GET the / form to add a new image:
-		getForm(rsp, req)
-		return
-	} else if req.URL.Path == "/favicon.ico" {
-		rsp.WriteHeader(http.StatusNoContent)
-		return
-	} else if req.URL.Path == "/list" {
-		api, err := NewAPI()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-		defer api.Close()
-
-		list, err := api.GetList()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-
-		rsp.WriteHeader(200)
-		rsp.Write([]byte(`
-<!DOCTYPE html>
-
-<html>
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Listing</title>
-
-<style type="text/css">
-html, body {
-  width: 100%%;
-  height: 100%%;
-}
-html {
-  display: table;
-}
-body {
-  display: table-cell;
-  vertical-align: middle;
-  text-align: center;
-  background-color: %[1]s;
-  color: silver;
-}
-</style>
-</head>
-<body>
-    <div>
-        <ul>`))
-		for _, img := range list {
-			_, ext := imageKindTo(img.Kind)
-			// TODO(jsd): HTML encoding!
-			rsp.Write([]byte(fmt.Sprintf(`<img src="/t/%[1]s" alt="%[2]s" title="%[2]s" /><a href="/b/%[1]s">%[2]s</a>`, base62Encode(img.ID+10000)+ext, img.Title)))
-		}
-		rsp.Write([]byte(`
-        </ul>
-    </div>
-</body>
-</html>`))
-		return
-	}
-
-	dir := path.Dir(req.URL.Path)
-	if dir == "/b" {
-		renderViewer(rsp, req)
-		return
-	} else if dir == "/w" {
-		renderViewer(rsp, req)
-		return
-	}
-
-	// Look up the image's record by base62 encoded ID:
-	filename := path.Base(req.URL.Path)
-	filename = filename[0 : len(filename)-len(path.Ext(req.URL.Path))]
-
-	id := base62Decode(filename) - 10000
-
-	api, err := NewAPI()
-	if webErrorIf(rsp, err, 500) {
-		return
-	}
-	defer api.Close()
-	img, err := api.GetImage(id)
-	if webErrorIf(rsp, err, 500) {
-		return
-	}
-	if img == nil {
-		rsp.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	// Determine mime-type and file extension:
-	mime, ext := imageKindTo(img.Kind)
-
-	// Find the image file:
-	img_name := base62Encode(id+10000) + ext
-
-	if dir == "/t" {
+	} else if dir == "/t" {
 		thumb_path := path.Join(thumb_folder, img_name)
 
 		rsp.Header().Set("Content-Type", mime)
