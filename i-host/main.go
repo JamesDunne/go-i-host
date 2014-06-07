@@ -58,6 +58,16 @@ func imageKindTo(imageKind string) (ext, mimeType string) {
 	return "", ""
 }
 
+func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
+	if err == nil {
+		return false
+	}
+
+	rsp.WriteHeader(statusCode)
+	rsp.Write([]byte(err.Error()))
+	return true
+}
+
 func postImage(rsp http.ResponseWriter, req *http.Request) {
 	// Accept file upload from client or download from URL supplied.
 	var local_path string
@@ -65,10 +75,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	if isMultipart(req) {
 		// Accept file upload:
 		reader, err := req.MultipartReader()
-		if err != nil {
-			//panic(NewHttpError(http.StatusBadRequest, "Error parsing multipart form data", err))
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
+		if webErrorIf(rsp, err, 500) {
 			return
 		}
 
@@ -87,19 +94,18 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		local_path = path.Join(tmp_folder, part.FileName())
 		//log.Printf("Accepting upload: '%s'\n", local_path)
 
-		f, err := os.Create(local_path)
-		if err != nil {
-			//panic(NewHttpError(http.StatusInternalServerError, "Could not accept upload", fmt.Errorf("Could not create local file '%s'; %s", local_path, err.Error())))
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
-		}
-		defer f.Close()
+		if err, statusCode := func() (error, int) {
+			f, err := os.Create(local_path)
+			if err != nil {
+				return err, 500
+			}
+			defer f.Close()
 
-		if _, err := io.Copy(f, part); err != nil {
-			//panic(NewHttpError(http.StatusInternalServerError, "Could not write upload data to local file", fmt.Errorf("Could not write to local file '%s'; %s", local_path, err)))
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
+			if _, err := io.Copy(f, part); err != nil {
+				return err, 500
+			}
+			return nil, 200
+		}(); webErrorIf(rsp, err, statusCode) {
 			return
 		}
 	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
@@ -108,9 +114,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 		// Parse the URL so we get the file name:
 		imgurl, err := url.Parse(imgurl_s)
-		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
+		if webErrorIf(rsp, err, 500) {
 			return
 		}
 
@@ -119,40 +123,38 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		//log.Printf("Downloading %s", filename)
 
 		// GET the url:
-		img_rsp, err := http.Get(imgurl_s)
-		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
-		}
-		defer img_rsp.Body.Close()
+		if err, statusCode := func() (error, int) {
+			img_rsp, err := http.Get(imgurl_s)
+			if err != nil {
+				return err, 500
+			}
+			defer img_rsp.Body.Close()
 
-		// Create a local file:
-		local_path = path.Join(tmp_folder, filename)
-		//log.Printf("to %s", local_path)
+			// Create a local file:
+			local_path = path.Join(tmp_folder, filename)
+			//log.Printf("to %s", local_path)
 
-		local_file, err := os.Create(local_path)
-		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
-		}
-		defer local_file.Close()
+			local_file, err := os.Create(local_path)
+			if err != nil {
+				return err, 500
+			}
+			defer local_file.Close()
 
-		// Download file:
-		_, err = io.Copy(local_file, img_rsp.Body)
-		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
+			// Download file:
+			_, err = io.Copy(local_file, img_rsp.Body)
+			if err != nil {
+				return err, 500
+			}
+
+			return nil, 200
+		}(); webErrorIf(rsp, err, statusCode) {
 			return
 		}
 	}
 
 	// Open the database:
 	api, err := NewAPI()
-	if err != nil {
-		rsp.WriteHeader(500)
-		rsp.Write([]byte(err.Error()))
+	if webErrorIf(rsp, err, 500) {
 		return
 	}
 	defer api.Close()
@@ -161,22 +163,21 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	var firstImage image.Image
 	var imageKind string
 
-	{
+	if err, statusCode := func() (error, int) {
 		imf, err := os.Open(local_path)
 		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
+			return err, 500
 		}
 		defer imf.Close()
 
 		firstImage, imageKind, err = image.Decode(imf)
 		if err != nil {
-			// Bad image format or unsupported type:
-			rsp.WriteHeader(400)
-			rsp.Write([]byte(err.Error()))
-			return
+			return err, 400
 		}
+
+		return nil, 200
+	}(); webErrorIf(rsp, err, statusCode) {
+		return
 	}
 
 	var ext string
@@ -196,38 +197,34 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 	// Create the DB record:
 	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
-	if err != nil {
-		rsp.WriteHeader(500)
-		rsp.Write([]byte(err.Error()))
+	if webErrorIf(rsp, err, 500) {
 		return
 	}
 
 	// Rename the file:
 	img_name := base62Encode(10000 + id)
-	if err := os.Rename(local_path, path.Join(store_folder, img_name+ext)); err != nil {
-		rsp.WriteHeader(500)
-		rsp.Write([]byte(err.Error()))
+	if err := os.Rename(local_path, path.Join(store_folder, img_name+ext)); webErrorIf(rsp, err, 500) {
 		return
 	}
 
 	// Generate the thumbnail:
-	{
+	if err, statusCode := func() (error, int) {
 		thumbImg := makeThumbnail(firstImage, 200)
 		tf, err := os.Create(path.Join(thumb_folder, img_name+ext))
 		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
+			return err, 500
 		}
 		defer tf.Close()
 
 		// Write the thumbnail to the file:
 		err = encoder(tf, thumbImg)
 		if err != nil {
-			rsp.WriteHeader(500)
-			rsp.Write([]byte(err.Error()))
-			return
+			return err, 500
 		}
+
+		return nil, 200
+	}(); webErrorIf(rsp, err, statusCode) {
+		return
 	}
 
 	// Redirect to the black-background viewer:

@@ -1,4 +1,5 @@
 *.exe
+sqlite.db
 /i-host/i-host
 /i-host/thumb
 /i-host/tmp
