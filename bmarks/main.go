@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 )
@@ -15,8 +16,9 @@ import "github.com/JamesDunne/i-host/base62"
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
 
 type Image struct {
-	ID    int64
-	Title string
+	ID       int64
+	Base62ID string
+	Title    string
 }
 
 type ByID []Image
@@ -30,6 +32,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	sql, err := os.Create("import.sql")
+	if err != nil {
+		panic(err)
+	}
+	defer sql.Close()
+	dl, err := os.Create("copy.sh")
+	if err != nil {
+		panic(err)
+	}
+	defer dl.Close()
 
 	br := bytes.NewReader(f)
 	s := bufio.NewScanner(br)
@@ -63,13 +76,17 @@ func main() {
 		//fmt.Printf("%s: %3d: %s\n", base62ID, id, desc)
 
 		imgs = append(imgs, Image{
-			ID:    id,
-			Title: desc,
+			ID:       id,
+			Base62ID: base62ID,
+			Title:    desc,
 		})
 	}
 
 	sort.Sort(ByID(imgs))
+
+	fmt.Fprintln(dl, "#!/bin/sh")
 	for _, img := range imgs {
-		fmt.Printf("insert into Image (ID, Kind, Title) values (%d, 'gif', '%s');\n", img.ID, strings.Replace(img.Title, "'", "''", -1))
+		fmt.Fprintf(sql, "insert into Image (ID, Kind, Title) values (%d, 'gif', '%s');\n", img.ID, strings.Replace(img.Title, "'", "''", -1))
+		fmt.Fprintf(dl, "scp bit:/srv/bittwiddlers.org/i/links/%s.gif ./%d.gif\n", img.Base62ID, img.ID)
 	}
 }

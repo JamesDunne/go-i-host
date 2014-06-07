@@ -8,10 +8,5 @@ func Test_base62Decode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log(e.Encode(10001))
-
-	t.Log(e.Decode("K70"))
-	t.Log(e.Decode("K71"))
-
-	t.Log(e.Decode(e.Encode(10001)))
+	t.Log(e.Encode(331 + 10000))
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -74,6 +75,62 @@ func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
 	rsp.WriteHeader(statusCode)
 	rsp.Write([]byte(err.Error()))
 	return true
+}
+
+func ensureThumbnail(image_path, thumb_path string) error {
+	// Thumbnail exists; leave it alone:
+	if _, err := os.Stat(thumb_path); err == nil {
+		return nil
+	}
+
+	// Attempt to parse the image:
+	var firstImage image.Image
+	var imageKind string
+
+	imf, err := os.Open(image_path)
+	if err != nil {
+		return err
+	}
+	defer imf.Close()
+
+	firstImage, imageKind, err = image.Decode(imf)
+	if err != nil {
+		return err
+	}
+
+	return generateThumbnail(firstImage, imageKind, thumb_path)
+}
+
+func generateThumbnail(firstImage image.Image, imageKind string, thumb_path string) error {
+	var encoder func(w io.Writer, m image.Image) error
+	switch imageKind {
+	case "jpeg":
+		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{Quality: 100}) }
+	case "png":
+		encoder = png.Encode
+	case "gif":
+		// TODO(jsd): Might want to rethink making GIF thumbnails.
+		encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
+	}
+
+	// Generate the thumbnail image:
+	thumbImg := makeThumbnail(firstImage, thumbnail_dimensions)
+
+	// Save it to a file:
+	os.Remove(thumb_path)
+	tf, err := os.Create(thumb_path)
+	if err != nil {
+		return err
+	}
+	defer tf.Close()
+
+	// Write the thumbnail to the file:
+	err = encoder(tf, thumbImg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func postImage(rsp http.ResponseWriter, req *http.Request) {
@@ -188,20 +245,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var ext string
-	var encoder func(w io.Writer, m image.Image) error
-
-	_, ext = imageKindTo(imageKind)
-
-	switch imageKind {
-	case "jpeg":
-		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{Quality: 100}) }
-	case "png":
-		encoder = png.Encode
-	case "gif":
-		// TODO(jsd): Might want to rethink making GIF thumbnails.
-		encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
-	}
+	_, ext := imageKindTo(imageKind)
 
 	// Create the DB record:
 	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
@@ -215,23 +259,9 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Generate the thumbnail:
-	if err, statusCode := func() (error, int) {
-		thumbImg := makeThumbnail(firstImage, thumbnail_dimensions)
-		tf, err := os.Create(path.Join(thumb_folder, img_name+ext))
-		if err != nil {
-			return err, 500
-		}
-		defer tf.Close()
-
-		// Write the thumbnail to the file:
-		err = encoder(tf, thumbImg)
-		if err != nil {
-			return err, 500
-		}
-
-		return nil, 200
-	}(); webErrorIf(rsp, err, statusCode) {
+	// Generate a thumbnail:
+	thumb_path := path.Join(thumb_folder, img_name+ext)
+	if err := generateThumbnail(firstImage, imageKind, thumb_path); webErrorIf(rsp, err, 500) {
 		return
 	}
 
@@ -340,7 +370,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 	// Find the image file:
 	base62ID := b62.Encode(id + 10000)
-	img_name := base62ID + ext
+	img_name := fmt.Sprintf("%d", id) + ext
 
 	if dir == "/b" || dir == "/w" {
 		// Render a black or white BG centered image viewer:
@@ -371,7 +401,10 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		return
 	} else if dir == "/t" {
+		// Serve thumbnail file:
+		local_path := path.Join(store_folder, img_name)
 		thumb_path := path.Join(thumb_folder, img_name)
+		ensureThumbnail(local_path, thumb_path)
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, thumb_path)
