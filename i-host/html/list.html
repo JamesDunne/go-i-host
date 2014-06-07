@@ -1,0 +1,37 @@
+{{define "list"}}
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Listing</title>
+
+<style type="text/css">
+html, body {
+  width: 100%;
+  height: 100%;
+}
+html {
+  display: table;
+}
+body {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: left;
+  background-color: black;
+  color: silver;
+}
+div.i { float: left; }
+</style>
+</head>
+<body>
+    <div>
+        {{range .List}}
+        <div class="i">
+            <a href="/b/{{.Base62ID}}"><img src="/t/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+        </div>
+        {{end}}
+    </div>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,26 @@
+{{define "new"}}
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>POST an Image</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<div>
+		<h2>Submit an image URL</h2>
+		<form action="/new" method="POST">
+			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+    <div>
+		<h2>Or upload an image</h2>
+		<form action="/new" method="POST" enctype="multipart/form-data">
+			<label for="file"><input type="file" id="file" name="file" /></label><br />
+			<input type="submit" value="Upload" />
+		</form>
+	</div>
+</body>
+</html>
+{{end}}

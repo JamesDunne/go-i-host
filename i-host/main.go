@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"mime"
@@ -21,10 +21,13 @@ import (
 	"image/png"
 )
 
+import "github.com/JamesDunne/go-util/fs/notify"
+
 // FIXME(jsd): Hard-coded system paths here!
 const (
 	//base_folder  = "/srv/bittwiddlers.org/i"
 	base_folder  = "."
+	html_path    = base_folder + "/html"
 	db_path      = base_folder + "/sqlite.db"
 	store_folder = base_folder + "/store"
 	thumb_folder = base_folder + "/thumb"
@@ -32,6 +35,8 @@ const (
 )
 
 const nginxAccelRedirect = false
+
+var uiTmpl *template.Template
 
 func isMultipart(r *http.Request) bool {
 	v := r.Header.Get("Content-Type")
@@ -233,32 +238,12 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+}
 
-	fmt.Fprintf(rsp, `
-<!DOCTYPE html>
-
-<html>
-<head>
-	<title>POST an Image</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-</head>
-<body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<div>
-		<h2>Submit an image URL</h2>
-		<form action="/new" method="POST">
-			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
-			<input type="submit" value="Submit" />
-		</form>
-	</div>
-    <div>
-		<h2>Or upload an image</h2>
-		<form action="/new" method="POST" enctype="multipart/form-data">
-			<label for="file"><input type="file" id="file" name="file" /></label><br />
-			<input type="submit" value="Upload" />
-		</form>
-	</div>
-</body>
-</html>`)
+type ImageListItem struct {
+	Base62ID  string
+	Extension string
+	Title     string
 }
 
 // handles requests to upload images and rehost with shortened URLs
@@ -294,53 +279,33 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		rsp.WriteHeader(200)
-		rsp.Write([]byte(`
-<!DOCTYPE html>
-
-<html>
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title>Listing</title>
-
-<style type="text/css">
-html, body {
-  width: 100%;
-  height: 100%;
-}
-html {
-  display: table;
-}
-body {
-  display: table-cell;
-  vertical-align: middle;
-  text-align: left;
-  background-color: black;
-  color: silver;
-}
-li {
-  list-style-type: none;
-}
-</style>
-</head>
-<body>
-    <div>
-        <ul>`))
+		// Project into a view model:
+		model := struct {
+			List []ImageListItem
+		}{
+			List: make([]ImageListItem, 0, len(list)),
+		}
 		for _, img := range list {
 			_, ext := imageKindTo(img.Kind)
-			// TODO(jsd): HTML encoding!
-			rsp.Write([]byte(fmt.Sprintf(`<li><a href="/b/%[1]s"><img src="/t/%[1]s%[2]s" alt="%[3]s" title="%[3]s" /></a></li>`+"\n", base62Encode(img.ID+10000), ext, img.Title)))
+			model.List = append(model.List, ImageListItem{
+				Base62ID:  base62Encode(img.ID + 10000),
+				Extension: ext,
+				Title:     img.Title,
+			})
 		}
-		rsp.Write([]byte(`
-        </ul>
-    </div>
-</body>
-</html>`))
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if err := uiTmpl.ExecuteTemplate(rsp, "list", model); webErrorIf(rsp, err, 500) {
+			return
+		}
 		return
 	} else if req.URL.Path == "/new" {
-		// GET the / form to add a new image:
-		getForm(rsp, req)
+		// GET the /new form to add a new image:
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := uiTmpl.ExecuteTemplate(rsp, "new", nil); webErrorIf(rsp, err, 500) {
+			return
+		}
 		return
 	}
 
@@ -370,7 +335,8 @@ li {
 	mime, ext := imageKindTo(img.Kind)
 
 	// Find the image file:
-	img_name := base62Encode(id+10000) + ext
+	base62ID := base62Encode(id + 10000)
+	img_name := base62ID + ext
 
 	if dir == "/b" || dir == "/w" {
 		// Render a black or white BG centered image viewer:
@@ -382,44 +348,23 @@ li {
 			bgcolor = "white"
 		}
 
+		model := struct {
+			BGColor   string
+			Base62ID  string
+			Extension string
+			Title     string
+		}{
+			BGColor:   bgcolor,
+			Base62ID:  base62ID,
+			Extension: ext,
+			Title:     img.Title,
+		}
+
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(rsp, `
-<!DOCTYPE html>
+		if err := uiTmpl.ExecuteTemplate(rsp, "view", model); webErrorIf(rsp, err, 500) {
+			return
+		}
 
-<html>
-<head>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <meta property="og:site_name" content="i.bittwiddlers.org"/>
-    <meta property="og:title" content="%[3]s"/>
-    <meta property="og:description" content=""/>
-    <meta property="og:image" content="/t/%[2]s">
-    <meta property="og:url" content="http://i.bittwiddlers.org/%[2]s">
-    <meta property="og:type" content="video.other"/>
-
-    <title>%[3]s</title>
-
-<style type="text/css">
-html, body {
-  width: 100%%;
-  height: 100%%;
-}
-html {
-  display: table;
-}
-body {
-  display: table-cell;
-  vertical-align: middle;
-  text-align: center;
-  background-color: %[1]s;
-  color: silver;
-}
-</style>
-</head>
-<body>
-	<div><img src="/%[2]s" alt="%[3]s" title="%[3]s" /></div>
-</body>
-</html>`, bgcolor, img_name, img.Title)
-		// TODO(jsd): HTML encoding!
 		return
 	} else if dir == "/t" {
 		thumb_path := path.Join(thumb_folder, img_name)
@@ -449,6 +394,55 @@ body {
 	}
 }
 
+func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, err error, deferClean func()) {
+	// Parse template files:
+	tmplGlob := path.Join(templatePath, glob)
+	ui, err := template.New(name).ParseGlob(tmplGlob)
+	if err != nil {
+		return nil, err, nil
+	}
+	uiTmpl = ui
+
+	// Watch template directory for file changes:
+	watcher, err = notify.NewWatcher()
+	if err != nil {
+		return nil, err, nil
+	}
+	deferClean = func() { watcher.RemoveWatch(templatePath); watcher.Close() }
+
+	// Process watcher events
+	go func() {
+		for {
+			select {
+			case ev := <-watcher.Event:
+				if ev == nil {
+					break
+				}
+				//log.Println("event:", ev)
+
+				// Update templates:
+				var err error
+				ui, err := template.New(name).ParseGlob(tmplGlob)
+				if err != nil {
+					log.Println(err)
+					break
+				}
+				uiTmpl = ui
+			case err := <-watcher.Error:
+				if err == nil {
+					break
+				}
+				log.Println("watcher error:", err)
+			}
+		}
+	}()
+
+	// Watch template file for changes:
+	watcher.Watch(templatePath)
+
+	return
+}
+
 func main() {
 	// Expect commandline arguments to specify:
 	//   <listen socket type> : "unix" or "tcp" type of socket to listen on
@@ -461,6 +455,14 @@ func main() {
 
 	// TODO(jsd): Make this pair of arguments a little more elegant, like "unix:/path/to/socket" or "tcp://:8080"
 	socketType, socketAddr := args[0], args[1]
+
+	// Watch the html templates for changes and reload them:
+	_, err, cleanup := watchTemplates("ui", html_path, "*.html")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer cleanup()
 
 	// Create the socket to listen on:
 	l, err := net.Listen(socketType, socketAddr)
