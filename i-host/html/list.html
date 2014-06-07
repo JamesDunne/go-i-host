@@ -16,19 +16,23 @@ html {
 }
 body {
   display: table-cell;
-  vertical-align: middle;
+  vertical-align: center;
   text-align: left;
   background-color: black;
   color: silver;
 }
-div.i { float: left; }
+div.i {
+  float: left;
+  padding-left: 16px;
+  padding-top: 16px;
+}
 </style>
 </head>
 <body>
     <div>
         {{range .List}}
         <div class="i">
-            <a href="/b/{{.Base62ID}}"><img src="/t/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+            <a href="/b/{{.Base62ID}}" target="_blank"><img width="200" height="200" src="/t/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" /></a>
         </div>
         {{end}}
     </div>

@@ -36,6 +36,8 @@ const (
 
 const nginxAccelRedirect = false
 
+const thumbnail_dimensions = 200
+
 var uiTmpl *template.Template
 
 func isMultipart(r *http.Request) bool {
@@ -213,7 +215,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 	// Generate the thumbnail:
 	if err, statusCode := func() (error, int) {
-		thumbImg := makeThumbnail(firstImage, 200)
+		thumbImg := makeThumbnail(firstImage, thumbnail_dimensions)
 		tf, err := os.Create(path.Join(thumb_folder, img_name+ext))
 		if err != nil {
 			return err, 500
