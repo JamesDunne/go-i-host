@@ -256,8 +256,12 @@ func renderViewer(rsp http.ResponseWriter, req *http.Request) {
 
 	img, err := api.GetImage(id)
 	if err != nil {
-		rsp.WriteHeader(404)
+		rsp.WriteHeader(500)
 		rsp.Write([]byte(err.Error()))
+		return
+	}
+	if img == nil {
+		rsp.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -302,6 +306,8 @@ body {
 	<div><img src="/%[2]s" alt="%[3]s" title="%[3]s" /></div>
 </body>
 </html>`, bgcolor, img_name, img.Title)
+	// TODO(jsd): HTML encoding!
+
 	return
 }
 
@@ -354,50 +360,123 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// GET the / form to add a new image:
 		getForm(rsp, req)
 		return
-	}
-
-	// Serve a GET request:
-	ext := path.Ext(req.URL.Path)
-	// 'ext' includes leading '.'
-	if ext == "" {
-		// No extension means to serve an image viewer for the image in question:
-		renderViewer(rsp, req)
+	} else if req.URL.Path == "/favicon.ico" {
+		rsp.WriteHeader(http.StatusNoContent)
 		return
-	} else {
-		if nginxAccelRedirect {
-			// Pass request to nginx to serve static content file:
-			redirPath := "/g" + req.URL.Path
-			//log.Printf("X-Accel-Redirect: %s", redirPath)
-			rsp.Header().Set("X-Accel-Redirect", redirPath)
-			rsp.Header().Set("Content-Type", mime.TypeByExtension(ext))
-			rsp.WriteHeader(200)
-			return
-		} else {
-			// Look up the GIF by base62 encoded ID:
-			id := base62Decode(path.Base(req.URL.Path))
-			api, err := NewAPI()
-			if err != nil {
-				rsp.WriteHeader(500)
-				return
-			}
-			img, err := api.GetImage(id)
-			if err != nil {
-				rsp.WriteHeader(500)
-				return
-			}
-
-			// Determine mime-type and file extension:
-			mime, ext := imageKindTo(img.Kind)
-
-			// Find the image file:
-			img_name := base62Encode(id+10000) + ext
-			local_path := path.Join(store_folder, img_name)
-
-			// Serve it with the proper mime-type:
-			rsp.Header().Set("Content-Type", mime)
-			http.ServeFile(rsp, req, local_path)
+	} else if req.URL.Path == "/list" {
+		api, err := NewAPI()
+		if webErrorIf(rsp, err, 500) {
 			return
 		}
+		defer api.Close()
+
+		list, err := api.GetList()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+
+		rsp.WriteHeader(200)
+		rsp.Write([]byte(`
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Listing</title>
+
+<style type="text/css">
+html, body {
+  width: 100%%;
+  height: 100%%;
+}
+html {
+  display: table;
+}
+body {
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+  background-color: %[1]s;
+  color: silver;
+}
+</style>
+</head>
+<body>
+    <div>
+        <ul>`))
+		for _, img := range list {
+			_, ext := imageKindTo(img.Kind)
+			// TODO(jsd): HTML encoding!
+			rsp.Write([]byte(fmt.Sprintf(`<img src="/t/%[1]s" alt="%[2]s" title="%[2]s" /><a href="/b/%[1]s">%[2]s</a>`, base62Encode(img.ID+10000)+ext, img.Title)))
+		}
+		rsp.Write([]byte(`
+        </ul>
+    </div>
+</body>
+</html>`))
+		return
+	}
+
+	dir := path.Dir(req.URL.Path)
+	if dir == "/b" {
+		renderViewer(rsp, req)
+		return
+	} else if dir == "/w" {
+		renderViewer(rsp, req)
+		return
+	}
+
+	// Look up the image's record by base62 encoded ID:
+	filename := path.Base(req.URL.Path)
+	filename = filename[0 : len(filename)-len(path.Ext(req.URL.Path))]
+
+	id := base62Decode(filename) - 10000
+
+	api, err := NewAPI()
+	if webErrorIf(rsp, err, 500) {
+		return
+	}
+	defer api.Close()
+	img, err := api.GetImage(id)
+	if webErrorIf(rsp, err, 500) {
+		return
+	}
+	if img == nil {
+		rsp.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	// Determine mime-type and file extension:
+	mime, ext := imageKindTo(img.Kind)
+
+	// Find the image file:
+	img_name := base62Encode(id+10000) + ext
+
+	if dir == "/t" {
+		thumb_path := path.Join(thumb_folder, img_name)
+
+		rsp.Header().Set("Content-Type", mime)
+		http.ServeFile(rsp, req, thumb_path)
+		return
+	}
+
+	// Serve actual image contents:
+	if nginxAccelRedirect {
+		// Pass request to nginx to serve static content file:
+		redirPath := "/g/" + img_name
+
+		//log.Printf("X-Accel-Redirect: %s", redirPath)
+		rsp.Header().Set("X-Accel-Redirect", redirPath)
+		rsp.Header().Set("Content-Type", mime)
+		rsp.WriteHeader(200)
+		return
+	} else {
+		// Serve content directly with the proper mime-type:
+		local_path := path.Join(store_folder, img_name)
+
+		rsp.Header().Set("Content-Type", mime)
+		http.ServeFile(rsp, req, local_path)
+		return
 	}
 }
 

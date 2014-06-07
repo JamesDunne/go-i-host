@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	_ "github.com/JamesDunne/go-util/base"
 	_ "github.com/JamesDunne/go-util/db/sqlite3"
@@ -77,8 +78,13 @@ func (api *API) NewImage(img Image) (int64, error) {
 	return id, nil
 }
 
-func (api *API) GetImage(id int64) (img Image, err error) {
-	err = api.db.Get(&img, `select ID, Kind, Title from Image where ID = ?1`, id)
+func (api *API) GetImage(id int64) (img *Image, err error) {
+	img = new(Image)
+	err = api.db.Get(img, `select ID, Kind, Title from Image where ID = ?1`, id)
+	if err == sql.ErrNoRows {
+		img = nil
+		return nil, nil
+	}
 	return
 }
 
