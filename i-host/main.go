@@ -113,8 +113,6 @@ func generateThumbnail(firstImage image.Image, imageKind string, thumb_path stri
 	case "png":
 		encoder = png.Encode
 	case "gif":
-		// TODO(jsd): Might want to rethink making GIF thumbnails.
-		//encoder = func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
 		encoder = png.Encode
 	}
 
@@ -141,6 +139,7 @@ func generateThumbnail(firstImage image.Image, imageKind string, thumb_path stri
 func postImage(rsp http.ResponseWriter, req *http.Request) {
 	// Accept file upload from client or download from URL supplied.
 	var local_path string
+	var title string
 
 	if isMultipart(req) {
 		// Accept file upload:
@@ -150,37 +149,55 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		// Keep reading the multipart form data and handle file uploads:
-		part, err := reader.NextPart()
-		if err == io.EOF {
-			rsp.WriteHeader(400)
-			return
-		}
-		if part.FileName() == "" {
-			rsp.WriteHeader(400)
-			return
-		}
-
-		// Copy upload data to a local file:
-		local_path = path.Join(tmp_folder, part.FileName())
-		//log.Printf("Accepting upload: '%s'\n", local_path)
-
-		if err, statusCode := func() (error, int) {
-			f, err := os.Create(local_path)
-			if err != nil {
-				return err, 500
+		for {
+			part, err := reader.NextPart()
+			if err == io.EOF {
+				break
 			}
-			defer f.Close()
-
-			if _, err := io.Copy(f, part); err != nil {
-				return err, 500
+			if part.FormName() == "title" {
+				// TODO: parse content-length if it exists?
+				//part.Header.Get("Content-Length")
+				t := make([]byte, 200)
+				n, err := part.Read(t)
+				if webErrorIf(rsp, err, 500) {
+					return
+				}
+				title = string(t[:n])
+				continue
 			}
-			return nil, 200
-		}(); webErrorIf(rsp, err, statusCode) {
-			return
+			if part.FileName() == "" {
+				continue
+			}
+
+			// Copy upload data to a local file:
+			local_path = path.Join(tmp_folder, part.FileName())
+			//log.Printf("Accepting upload: '%s'\n", local_path)
+
+			if err, statusCode := func() (error, int) {
+				f, err := os.Create(local_path)
+				if err != nil {
+					return err, 500
+				}
+				defer f.Close()
+
+				if _, err := io.Copy(f, part); err != nil {
+					return err, 500
+				}
+				return nil, 200
+			}(); webErrorIf(rsp, err, statusCode) {
+				return
+			}
 		}
 	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
 		// Handle download from URL:
-		//log.Printf("%s", imgurl_s)
+
+		// Require the 'title' form value:
+		title = req.FormValue("title")
+		if title == "" {
+			rsp.WriteHeader(http.StatusBadRequest)
+			rsp.Write([]byte("Missing title!"))
+			return
+		}
 
 		// Parse the URL so we get the file name:
 		imgurl, err := url.Parse(imgurl_s)
@@ -222,6 +239,12 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	if title == "" {
+		rsp.WriteHeader(http.StatusBadRequest)
+		rsp.Write([]byte("Missing title!"))
+		return
+	}
+
 	// Open the database:
 	api, err := NewAPI()
 	if webErrorIf(rsp, err, 500) {
@@ -253,7 +276,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	_, ext, thumbExt := imageKindTo(imageKind)
 
 	// Create the DB record:
-	id, err := api.NewImage(Image{Kind: imageKind, Title: "TODO"})
+	id, err := api.NewImage(Image{Kind: imageKind, Title: title})
 	if webErrorIf(rsp, err, 500) {
 		return
 	}
@@ -281,6 +304,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 }
 
 type ImageListItem struct {
+	ID             int64
 	Base62ID       string
 	Extension      string
 	ThumbExtension string
@@ -329,6 +353,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		for _, img := range list {
 			_, ext, thumbExt := imageKindTo(img.Kind)
 			model.List = append(model.List, ImageListItem{
+				ID:             img.ID,
 				Base62ID:       b62.Encode(img.ID + 10000),
 				Extension:      ext,
 				ThumbExtension: thumbExt,
@@ -391,15 +416,19 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		model := struct {
-			BGColor   string
-			Base62ID  string
-			Extension string
-			Title     string
+			BGColor        string
+			ID             int64
+			Base62ID       string
+			Extension      string
+			ThumbExtension string
+			Title          string
 		}{
-			BGColor:   bgcolor,
-			Base62ID:  base62ID,
-			Extension: ext,
-			Title:     img.Title,
+			BGColor:        bgcolor,
+			ID:             img.ID,
+			Base62ID:       base62ID,
+			Extension:      ext,
+			ThumbExtension: thumbExt,
+			Title:          img.Title,
 		}
 
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -441,6 +470,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// Watches the html/*.html templates for changes:
 func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, err error, deferClean func()) {
 	// Parse template files:
 	tmplGlob := path.Join(templatePath, glob)

@@ -49,7 +49,7 @@ div.i>p {
 <body>
     <div>
         {{range .List}}
-        <div class="i">
+        <div class="i" id="i{{.ID}}">
             <a href="/b/{{.Base62ID}}" target="_blank"><img width="200" height="200" src="/t/{{.Base62ID}}{{.ThumbExtension}}" alt="{{.Title}}" title="{{.Title}}" /></a>
 			<p>{{.Title}}</p>
         </div>
