@@ -33,8 +33,8 @@ func NewAPI() (api *API, err error) {
 	api.ddl(`
 create table if not exists Image (
 	ID INTEGER PRIMARY KEY AUTOINCREMENT,
+	MimeType TEXT NOT NULL,
 	Title TEXT NOT NULL,
-	Extension TEXT NOT NULL,
 	CONSTRAINT PK_Image PRIMARY KEY (ID ASC)
 )`)
 
@@ -46,13 +46,25 @@ func (api *API) Close() {
 }
 
 type Image struct {
-	ID        int64  `db:"ID"`
-	ImagePath string `db:"ImagePath"`
-	Title     string `db:"Title"`
+	ID       int64  `db:"ID"`
+	MimeType string `db:"MimeType"`
+	Title    string `db:"Title"`
 }
 
-func (api *API) NewImage(imagePath, title string) (int64, error) {
-	res, err := api.db.Exec(`insert into Image (ImagePath, Title) values (?1, ?2)`, imagePath, title)
+func (api *API) NewImage(img Image) (int64, error) {
+	var query string
+	var args []interface{}
+	if img.ID <= 0 {
+		// Insert a new record:
+		query = `insert into Image (MimeType, Title) values (?1, ?2)`
+		args = []interface{}{img.MimeType, img.Title}
+	} else {
+		// Do an identity insert:
+		query = `insert into Image (ID, MimeType, Title) values (?1, ?2, ?3)`
+		args = []interface{}{img.ID, img.MimeType, img.Title}
+	}
+
+	res, err := api.db.Exec(query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -67,14 +79,14 @@ func (api *API) NewImage(imagePath, title string) (int64, error) {
 }
 
 func (api *API) GetImage(id int64) (img Image, err error) {
-	err = api.db.Get(&img, `select ID, ImagePath, Title from Image where ID = ?1`, id)
+	err = api.db.Get(&img, `select ID, MimeType, Title from Image where ID = ?1`, id)
 	return
 }
 
 func (api *API) GetList() (imgs []Image, err error) {
 	imgs = make([]Image, 0, 200)
 
-	err = api.db.Select(&imgs, `select ID, ImagePath, Title from Image order by Title ASC`)
+	err = api.db.Select(&imgs, `select ID, MimeType, Title from Image order by Title ASC`)
 
 	return
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"log"
@@ -12,88 +11,24 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strconv"
 	"strings"
 	"syscall"
+)
+
+import (
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 )
 
 // FIXME(jsd): Hard-coded system paths here!
 const (
 	base_folder  = "/srv/bittwiddlers.org/i"
 	db_path      = base_folder + "/sqlite.db"
-	links_folder = base_folder + "/links"
 	store_folder = base_folder + "/store"
 	thumb_folder = base_folder + "/thumb"
 )
-
-type FileId uint64
-
-func newId() FileId {
-	count_path := path.Join(store_folder, "count")
-	f, err := os.OpenFile(count_path, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		f, err = os.Create(count_path)
-	}
-	defer f.Close()
-
-	// Lock the file for exclusive acccess:
-	syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
-
-	scanner := bufio.NewScanner(f)
-	scanner.Scan()
-	line := scanner.Text()
-
-	id64, err := strconv.ParseInt(line, 10, 0)
-	if err != nil {
-		id64 = 10000
-	}
-	id64++
-
-	f.Truncate(0)
-	f.Seek(0, 0)
-	f.WriteString(strconv.FormatInt(id64, 10))
-
-	return FileId(id64)
-}
-
-func getForm(rsp http.ResponseWriter, req *http.Request) {
-	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	fmt.Fprintf(rsp, `
-<!DOCTYPE html>
-
-<html>
-<head>
-	<title>POST a GIF</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-</head>
-<body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<div>
-		<h2>Submit an image URL</h2>
-		<form action="/" method="POST">
-			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
-			<input type="submit" value="Submit" />
-		</form>
-	</div>
-    <div>
-		<h2>Or upload an image</h2>
-		<form action="/" method="POST" enctype="multipart/form-data">
-			<label for="file"><input type="file" id="file" name="file" /></label><br />
-			<input type="submit" value="Upload" />
-		</form>
-	</div>
-</body>
-</html>`)
-}
-
-func createLink(local_path string, id int64) (img_name string) {
-	// Create the symlink:
-	img_name = base62Encode(id)
-	symlink_name := img_name + ".gif"
-	symlink_path := path.Join(links_folder, symlink_name)
-	os.Symlink(local_path, symlink_path)
-	return
-}
 
 func isMultipart(r *http.Request) bool {
 	v := r.Header.Get("Content-Type")
@@ -198,14 +133,67 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	}
 	defer api.Close()
 
-	id, err := api.NewImage(local_path, "TODO")
+	// Attempt to parse the image:
+	var firstImage image.Image
+	var imageKind string
+
+	{
+		imf, err := os.Open(local_path)
+		if err != nil {
+			rsp.WriteHeader(500)
+			return
+		}
+		defer imf.Close()
+
+		firstImage, imageKind, err = image.Decode(imf)
+		if err != nil {
+			// Bad image format or unsupported type:
+			rsp.WriteHeader(400)
+			rsp.Write([]byte(err.Error()))
+			return
+		}
+	}
+
+	var mimeType, ext string
+	var encoder func(w io.Writer, m image.Image) error
+	switch imageKind {
+	case "jpeg":
+		mimeType, ext, encoder = "image/jpeg", ".jpg", func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{}) }
+	case "png":
+		mimeType, ext, encoder = "image/png", ".png", png.Encode
+	case "gif":
+		// TODO(jsd): Might want to rethink making GIF thumbnails.
+		mimeType, ext, encoder = "image/gif", ".gif", func(w io.Writer, img image.Image) error { return gif.Encode(w, img, &gif.Options{NumColors: 256}) }
+	}
+
+	// Create the DB record:
+	id, err := api.NewImage(Image{MimeType: mimeType, Title: "TODO"})
 	if err != nil {
 		rsp.WriteHeader(500)
 		return
 	}
 
-	// Create the symlink:
-	img_name := createLink(local_path, id)
+	// Rename the file:
+	img_name := base62Encode(id) + ext
+	os.Rename(local_path, path.Join(path.Dir(local_path), img_name))
+
+	// Generate the thumbnail:
+	{
+		thumbImg := makeThumbnail(firstImage, 200)
+		tf, err := os.Create(path.Join(thumb_folder, img_name))
+		if err != nil {
+			rsp.WriteHeader(500)
+			return
+		}
+		defer tf.Close()
+
+		// Write the thumbnail to the file:
+		err = encoder(tf, thumbImg)
+		if err != nil {
+			rsp.WriteHeader(500)
+			return
+		}
+	}
 
 	// Redirect to the black-background viewer:
 	redir_url := path.Join("/b/", img_name)
@@ -310,6 +298,36 @@ func postHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+}
+
+func getForm(rsp http.ResponseWriter, req *http.Request) {
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	fmt.Fprintf(rsp, `
+<!DOCTYPE html>
+
+<html>
+<head>
+	<title>POST a GIF</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+</head>
+<body style="background: black; color: silver; text-align: center; vertical-align: middle">
+	<div>
+		<h2>Submit an image URL</h2>
+		<form action="/" method="POST">
+			<label for="url">URL: <input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
+			<input type="submit" value="Submit" />
+		</form>
+	</div>
+    <div>
+		<h2>Or upload an image</h2>
+		<form action="/" method="POST" enctype="multipart/form-data">
+			<label for="file"><input type="file" id="file" name="file" /></label><br />
+			<input type="submit" value="Upload" />
+		</form>
+	</div>
+</body>
+</html>`)
 }
 
 func main() {

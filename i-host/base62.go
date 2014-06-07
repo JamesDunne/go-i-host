@@ -4,7 +4,7 @@ import "strings"
 
 // Shuffled            "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const base62Alphabet = "krKL5Z0Uz9tiXh3lNsq1MFVmPcdIeoyB28vWGupQS7H6wOYDnJbfEgTxRAa4Cj"
-const base = int64(len(base62Alphabet))
+const _base = int64(len(base62Alphabet))
 
 // base62Encode encodes a number to a base62 string representation.
 func base62Encode(num int64) string {
@@ -15,8 +15,8 @@ func base62Encode(num int64) string {
 	arr := []uint8{}
 
 	for num > 0 {
-		rem := num % base
-		num = num / base
+		rem := num % _base
+		num = num / _base
 		arr = append(arr, base62Alphabet[rem])
 	}
 
@@ -32,7 +32,7 @@ func base62Decode(num string) (val int64) {
 
 	for i := 0; i < len(num); i++ {
 		c := strings.IndexByte(base62Alphabet, num[i])
-		val = (val * base) + int64(c)
+		val = (val * _base) + int64(c)
 	}
 
 	return
