@@ -27,16 +27,17 @@ import "github.com/JamesDunne/i-host/base62"
 
 // FIXME(jsd): Hard-coded system paths here!
 const (
-	//base_folder  = "/srv/bittwiddlers.org/i"
-	base_folder  = "."
+	nginxAccelRedirect = true
+	base_folder        = "/srv/bittwiddlers.org/i2"
+
+	//base_folder  = "."
+
 	html_path    = base_folder + "/html"
 	db_path      = base_folder + "/sqlite.db"
 	store_folder = base_folder + "/store"
 	thumb_folder = base_folder + "/thumb"
 	tmp_folder   = base_folder + "/tmp"
 )
-
-const nginxAccelRedirect = false
 
 const thumbnail_dimensions = 200
 
