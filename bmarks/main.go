@@ -87,6 +87,6 @@ func main() {
 	fmt.Fprintln(dl, "#!/bin/sh")
 	for _, img := range imgs {
 		fmt.Fprintf(sql, "insert into Image (ID, Kind, Title) values (%d, 'gif', '%s');\n", img.ID, strings.Replace(img.Title, "'", "''", -1))
-		fmt.Fprintf(dl, "scp bit:/srv/bittwiddlers.org/i/links/%s.gif ./%d.gif\n", img.Base62ID, img.ID)
+		fmt.Fprintf(dl, "cp -L /srv/bittwiddlers.org/i/links/%s.gif /srv/bittwiddlers.org/i2/store/%d.gif\n", img.Base62ID, img.ID)
 	}
 }
