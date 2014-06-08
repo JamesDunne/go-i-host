@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -26,20 +27,19 @@ import "github.com/JamesDunne/go-util/fs/notify"
 import "github.com/JamesDunne/i-host/base62"
 
 // FIXME(jsd): Hard-coded system paths here!
-const (
-	nginxAccelRedirect = true
-	base_folder        = "/srv/bittwiddlers.org/i2"
-
-	//base_folder  = "."
-
-	html_path    = base_folder + "/html"
-	db_path      = base_folder + "/sqlite.db"
-	store_folder = base_folder + "/store"
-	thumb_folder = base_folder + "/thumb"
-	tmp_folder   = base_folder + "/tmp"
+var (
+	base_folder = "/srv/bittwiddlers.org/i2"
+	xrGif       = "/p-g/"
+	xrThumb     = "/p-t/"
 )
 
 const thumbnail_dimensions = 200
+
+func html_path() string    { return base_folder + "/html" }
+func db_path() string      { return base_folder + "/sqlite.db" }
+func store_folder() string { return base_folder + "/store" }
+func thumb_folder() string { return base_folder + "/thumb" }
+func tmp_folder() string   { return base_folder + "/tmp" }
 
 var uiTmpl *template.Template
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
@@ -171,7 +171,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 			}
 
 			// Copy upload data to a local file:
-			local_path = path.Join(tmp_folder, part.FileName())
+			local_path = path.Join(tmp_folder(), part.FileName())
 			//log.Printf("Accepting upload: '%s'\n", local_path)
 
 			if err, statusCode := func() (error, int) {
@@ -219,7 +219,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 			defer img_rsp.Body.Close()
 
 			// Create a local file:
-			local_path = path.Join(tmp_folder, filename)
+			local_path = path.Join(tmp_folder(), filename)
 			//log.Printf("to %s", local_path)
 
 			local_file, err := os.Create(local_path)
@@ -284,13 +284,13 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 
 	// Rename the file:
 	img_name := fmt.Sprintf("%d", id)
-	store_path := path.Join(store_folder, img_name+ext)
+	store_path := path.Join(store_folder(), img_name+ext)
 	if err := os.Rename(local_path, store_path); webErrorIf(rsp, err, 500) {
 		return
 	}
 
 	// Generate a thumbnail:
-	thumb_path := path.Join(thumb_folder, img_name+thumbExt)
+	thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
 	if err := generateThumbnail(firstImage, imageKind, thumb_path); webErrorIf(rsp, err, 500) {
 		return
 	}
@@ -440,21 +440,32 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	} else if dir == "/t" {
 		// Serve thumbnail file:
-		local_path := path.Join(store_folder, img_name+ext)
-		thumb_path := path.Join(thumb_folder, img_name+thumbExt)
+		local_path := path.Join(store_folder(), img_name+ext)
+		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
 		if err := ensureThumbnail(local_path, thumb_path); webErrorIf(rsp, err, 500) {
 			return
 		}
 
-		rsp.Header().Set("Content-Type", mime)
-		http.ServeFile(rsp, req, thumb_path)
-		return
+		if xrThumb != "" {
+			// Pass request to nginx to serve static content file:
+			redirPath := path.Join(xrThumb, img_name+ext)
+
+			//log.Printf("X-Accel-Redirect: %s", redirPath)
+			rsp.Header().Set("X-Accel-Redirect", redirPath)
+			rsp.Header().Set("Content-Type", mime)
+			rsp.WriteHeader(200)
+			return
+		} else {
+			rsp.Header().Set("Content-Type", mime)
+			http.ServeFile(rsp, req, thumb_path)
+			return
+		}
 	}
 
 	// Serve actual image contents:
-	if nginxAccelRedirect {
+	if xrGif != "" {
 		// Pass request to nginx to serve static content file:
-		redirPath := "/g/" + img_name + ext
+		redirPath := path.Join(xrGif, img_name+ext)
 
 		//log.Printf("X-Accel-Redirect: %s", redirPath)
 		rsp.Header().Set("X-Accel-Redirect", redirPath)
@@ -463,7 +474,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	} else {
 		// Serve content directly with the proper mime-type:
-		local_path := path.Join(store_folder, img_name+ext)
+		local_path := path.Join(store_folder(), img_name+ext)
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, local_path)
@@ -522,20 +533,21 @@ func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, e
 }
 
 func main() {
-	// Expect commandline arguments to specify:
-	//   <listen socket type> : "unix" or "tcp" type of socket to listen on
-	//   <listen address>     : network address to listen on if "tcp" or path to socket if "unix"
-	args := os.Args[1:]
-	if len(args) != 2 {
-		log.Fatal("Required <listen socket type> <listen address> arguments")
-		return
-	}
+	// Define our commandline flags:
+	socketType := flag.String("t", "tcp", "socket type to listen on: 'unix', 'tcp', 'udp'")
+	socketAddr := flag.String("l", ":8080", "address to listen on")
+	fs := flag.String("fs", ".", "Root directory of served files and templates")
+	xrGifArg := flag.String("xrg", "", "X-Accel-Redirect header prefix for serving images or blank to disable")
+	xrThumbArg := flag.String("xrt", "", "X-Accel-Redirect header prefix for serving thumbnails or blank to disable")
 
-	// TODO(jsd): Make this pair of arguments a little more elegant, like "unix:/path/to/socket" or "tcp://:8080"
-	socketType, socketAddr := args[0], args[1]
+	// Parse the flags and set values:
+	flag.Parse()
+	base_folder = path.Clean(*fs)
+	xrGif = *xrGifArg
+	xrThumb = *xrThumbArg
 
 	// Watch the html templates for changes and reload them:
-	_, err, cleanup := watchTemplates("ui", html_path, "*.html")
+	_, err, cleanup := watchTemplates("ui", html_path(), "*.html")
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -543,27 +555,31 @@ func main() {
 	defer cleanup()
 
 	// Create the socket to listen on:
-	l, err := net.Listen(socketType, socketAddr)
+	l, err := net.Listen(*socketType, *socketAddr)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
-	// NOTE(jsd): Unix sockets must be unlink()ed before being reused again.
+	// NOTE(jsd): Unix sockets must be removed before being reused.
 
 	// Handle common process-killing signals so we can gracefully shut down:
+	// TODO(jsd): Go does not catch Windows' process kill signals (yet?)
 	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM)
+	signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGQUIT)
 	go func(c chan os.Signal) {
 		// Wait for a signal:
 		sig := <-c
-		log.Printf("Caught signal '%s': shutting down.", sig)
+		log.Printf("Caught signal '%s': shutting down.\n", sig)
+
 		// Stop listening:
 		l.Close()
+
 		// Delete the unix socket, if applicable:
-		if socketType == "unix" {
-			os.Remove(socketAddr)
+		if *socketType == "unix" {
+			os.Remove(*socketAddr)
 		}
+
 		// And we're done:
 		os.Exit(0)
 	}(sigc)

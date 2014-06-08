@@ -22,7 +22,7 @@ func (api *API) ddl(cmds ...string) {
 }
 
 func NewAPI() (api *API, err error) {
-	db, err := sqlx.Open("sqlite3", db_path)
+	db, err := sqlx.Open("sqlite3", db_path())
 	if err != nil {
 		db.Close()
 		return nil, err
