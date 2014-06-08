@@ -448,7 +448,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		if xrThumb != "" {
 			// Pass request to nginx to serve static content file:
-			redirPath := path.Join(xrThumb, img_name+ext)
+			redirPath := path.Join(xrThumb, img_name+thumbExt)
 
 			//log.Printf("X-Accel-Redirect: %s", redirPath)
 			rsp.Header().Set("X-Accel-Redirect", redirPath)
