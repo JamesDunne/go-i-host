@@ -41,6 +41,7 @@ body {
 <script>
 	function showme(img) {
 		var invRatio = 1.0 / window.devicePixelRatio;
+        if (invRatio < 0.5) invRatio = 0.5;
 		img.style.width = img.width * invRatio + "px";
 		img.style.height = img.height * invRatio + "px";
 		img.style.display = "block";

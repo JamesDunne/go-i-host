@@ -16,18 +16,18 @@ html {
 }
 body {
   display: table-cell;
-  vertical-align: center;
-  text-align: left;
+  vertical-align: middle;
+  text-align: center;
   background-color: black;
   color: silver;
   font-family: Arial,sans-serif
 }
 div.i {
   float: left;
-  margin: .1% .4%;
-  width: 31.333%;
+  margin: 2px 4px;
   border: 2px solid #444442;
   overflow: hidden;
+  text-align: left;
 }
 div.i div.container {
   width: 100%;
@@ -42,6 +42,12 @@ div.i div.thumb a {
 div.i div.thumb a img {
   width: 100%;
 }
+@media (resolution: 1dppx) {
+  div.i { width: 200px; height: 222px; }
+}
+@media (min-resolution: 2dppx) {
+  div.i { width: 100px; height: 122px; }
+}
 div.i div.title {
   margin: 0px;
   font-size: 14px;
@@ -51,7 +57,6 @@ div.i div.title {
 </style>
 </head>
 <body>
-    <div>
         {{range .List}}
 		<div class="i" id="i{{.ID}}">
 			<div class="container">
@@ -62,7 +67,6 @@ div.i div.title {
 			</div>
         </div>
         {{end}}
-    </div>
 </body>
 </html>
 {{end}}
