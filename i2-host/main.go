@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -75,6 +76,24 @@ func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
 
 	rsp.WriteHeader(statusCode)
 	rsp.Write([]byte(err.Error()))
+	return true
+}
+
+func jsonErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
+	if err == nil {
+		return false
+	}
+
+	rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rsp.WriteHeader(statusCode)
+	j, _ := json.Marshal(struct {
+		StatusCode int    `json:"statusCode"`
+		Error      string `json:"error"`
+	}{
+		StatusCode: statusCode,
+		Error:      err.Error(),
+	})
+	rsp.Write(j)
 	return true
 }
 
@@ -312,6 +331,14 @@ type ImageListItem struct {
 	Title          string
 }
 
+type ImageListItemJson struct {
+	ID       int64  `json:"id"`
+	Base62ID string `json:"base62id"`
+	Title    string `json:"title"`
+	ImageURL string `json:"imageURL"`
+	ThumbURL string `json:"thumbURL"`
+}
+
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
@@ -368,9 +395,49 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 		return
+	} else if req.URL.Path == "/api/list" {
+		api, err := NewAPI()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+		defer api.Close()
+
+		list, err := api.GetList()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageListItemJson `json:"list"`
+		}{
+			List: make([]ImageListItemJson, 0, len(list)),
+		}
+		for _, img := range list {
+			_, ext, thumbExt := imageKindTo(img.Kind)
+			base62id := b62.Encode(img.ID + 10000)
+			model.List = append(model.List, ImageListItemJson{
+				ID:       img.ID,
+				Base62ID: base62id,
+				Title:    img.Title,
+				ImageURL: "/" + base62id + ext,
+				ThumbURL: "/t/" + base62id + thumbExt,
+			})
+		}
+
+		jsonText, err := json.Marshal(model)
+		if jsonErrorIf(rsp, err, 500) {
+			return
+		}
+
+		rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rsp.WriteHeader(200)
+		rsp.Write(jsonText)
+		return
 	} else if req.URL.Path == "/new" {
 		// GET the /new form to add a new image:
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
 		if err := uiTmpl.ExecuteTemplate(rsp, "new", nil); webErrorIf(rsp, err, 500) {
 			return
 		}
