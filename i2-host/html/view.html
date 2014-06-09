@@ -3,7 +3,7 @@
 
 <html>
 <head>
-	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="{{.Title}}"/>
     <meta property="og:description" content=""/>
@@ -34,13 +34,20 @@ body {
 </style>
 </head>
 <body>
-		<div id="container" data-id="{{.ID}}">
-			<img id="imain" src="/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" />
-		</div>
-	<script>
-		var c = document.getElementById("imain");
-		c.style["max-width"] = "" + (100.0 / window.devicePixelRatio) + "%";
-	</script>
+<div id="container" data-id="{{.ID}}">
+	<img id="imain" onload="showme(this)" style="display: none" src="/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" />
+    <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
+</div>
+<script>
+	function showme(img) {
+		var invRatio = 1.0 / window.devicePixelRatio;
+		img.style.width = img.width * invRatio + "px";
+		img.style.height = img.height * invRatio + "px";
+		img.style.display = "block";
+		var loader = document.getElementById("loader");
+		loader.style.display = "none";
+	}
+</script>
 </body>
 </html>
 {{end}}
