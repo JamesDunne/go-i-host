@@ -57,7 +57,7 @@ func isMultipart(r *http.Request) bool {
 	return true
 }
 
-func imageKindTo(imageKind string) (ext, thumbExt, mimeType string) {
+func imageKindTo(imageKind string) (mimeType, ext, thumbExt string) {
 	switch imageKind {
 	case "jpeg":
 		return "image/jpeg", ".jpg", ".jpg"
@@ -160,6 +160,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	// Accept file upload from client or download from URL supplied.
 	var local_path string
 	var title string
+	var sourceURL string
 
 	if isMultipart(req) {
 		// Accept file upload:
@@ -190,6 +191,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 			}
 
 			// Copy upload data to a local file:
+			sourceURL = "file://" + part.FileName()
 			local_path = path.Join(tmp_folder(), part.FileName())
 			//log.Printf("Accepting upload: '%s'\n", local_path)
 
@@ -220,6 +222,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		// Parse the URL so we get the file name:
+		sourceURL = imgurl_s
 		imgurl, err := url.Parse(imgurl_s)
 		if webErrorIf(rsp, err, 500) {
 			return
@@ -296,7 +299,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	_, ext, thumbExt := imageKindTo(imageKind)
 
 	// Create the DB record:
-	id, err := api.NewImage(Image{Kind: imageKind, Title: title})
+	id, err := api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: true})
 	if webErrorIf(rsp, err, 500) {
 		return
 	}
@@ -332,11 +335,15 @@ type ImageListItem struct {
 }
 
 type ImageListItemJson struct {
-	ID       int64  `json:"id"`
-	Base62ID string `json:"base62id"`
-	Title    string `json:"title"`
-	ImageURL string `json:"imageURL"`
-	ThumbURL string `json:"thumbURL"`
+	ID           int64   `json:"id"`
+	Base62ID     string  `json:"base62id"`
+	Title        string  `json:"title"`
+	ImageURL     string  `json:"imageURL"`
+	ThumbURL     string  `json:"thumbURL"`
+	IsHidden     bool    `json:"isHidden"`
+	IsClean      bool    `json:"isClean"`
+	SourceURL    *string `json:"sourceURL,omitempty"`
+	RedirectToID *int64  `json:"redirectToID,omitempty"`
 }
 
 // handles requests to upload images and rehost with shortened URLs
@@ -345,7 +352,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	if req.Method == "POST" {
 		// POST:
 
-		if req.URL.Path == "/new" {
+		if req.URL.Path == "/a/new" {
 			// POST a new image:
 			postImage(rsp, req)
 			return
@@ -360,7 +367,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		rsp.WriteHeader(http.StatusNoContent)
 		return
 	} else if req.URL.Path == "/" {
-		// Render a list page:
+		// Render a list page for the public items:
 		api, err := NewAPI()
 		if webErrorIf(rsp, err, 500) {
 			return
@@ -379,6 +386,14 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			List: make([]ImageListItem, 0, len(list)),
 		}
 		for _, img := range list {
+			// No "unclean" images on the front page:
+			if !img.IsClean {
+				continue
+			}
+			if img.IsHidden {
+				continue
+			}
+
 			_, ext, thumbExt := imageKindTo(img.Kind)
 			model.List = append(model.List, ImageListItem{
 				ID:             img.ID,
@@ -392,6 +407,54 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rsp.WriteHeader(200)
 		if err := uiTmpl.ExecuteTemplate(rsp, "list", model); webErrorIf(rsp, err, 500) {
+			return
+		}
+		return
+	} else if req.URL.Path == "/a/all" {
+		// Render a list page for the all-inclusive private collection:
+		api, err := NewAPI()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+		defer api.Close()
+
+		list, err := api.GetList()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageListItem
+		}{
+			List: make([]ImageListItem, 0, len(list)),
+		}
+		for _, img := range list {
+			if img.IsHidden {
+				continue
+			}
+
+			_, ext, thumbExt := imageKindTo(img.Kind)
+			model.List = append(model.List, ImageListItem{
+				ID:             img.ID,
+				Base62ID:       b62.Encode(img.ID + 10000),
+				Extension:      ext,
+				ThumbExtension: thumbExt,
+				Title:          img.Title,
+			})
+		}
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if err := uiTmpl.ExecuteTemplate(rsp, "list", model); webErrorIf(rsp, err, 500) {
+			return
+		}
+		return
+	} else if req.URL.Path == "/a/new" {
+		// GET the /a/new form to add a new image:
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if err := uiTmpl.ExecuteTemplate(rsp, "new", nil); webErrorIf(rsp, err, 500) {
 			return
 		}
 		return
@@ -417,11 +480,15 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			_, ext, thumbExt := imageKindTo(img.Kind)
 			base62id := b62.Encode(img.ID + 10000)
 			model.List = append(model.List, ImageListItemJson{
-				ID:       img.ID,
-				Base62ID: base62id,
-				Title:    img.Title,
-				ImageURL: "/" + base62id + ext,
-				ThumbURL: "/t/" + base62id + thumbExt,
+				ID:           img.ID,
+				Base62ID:     base62id,
+				Title:        img.Title,
+				ImageURL:     "/" + base62id + ext,
+				ThumbURL:     "/t/" + base62id + thumbExt,
+				IsHidden:     img.IsHidden,
+				IsClean:      img.IsClean,
+				SourceURL:    img.SourceURL,
+				RedirectToID: img.RedirectToID,
 			})
 		}
 
@@ -433,14 +500,6 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
 		rsp.WriteHeader(200)
 		rsp.Write(jsonText)
-		return
-	} else if req.URL.Path == "/new" {
-		// GET the /new form to add a new image:
-		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, "new", nil); webErrorIf(rsp, err, 500) {
-			return
-		}
 		return
 	}
 
@@ -466,12 +525,21 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Follow redirect chain:
+	for img.RedirectToID != nil {
+		newimg, err := api.GetImage(*img.RedirectToID)
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
+		img = newimg
+	}
+
 	// Determine mime-type and file extension:
 	mime, ext, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
-	base62ID := b62.Encode(id + 10000)
-	img_name := fmt.Sprintf("%d", id)
+	base62ID := b62.Encode(img.ID + 10000)
+	img_name := fmt.Sprintf("%d", img.ID)
 
 	if dir == "/b" || dir == "/w" {
 		// Render a black or white BG centered image viewer:
@@ -612,6 +680,14 @@ func main() {
 	base_folder = path.Clean(*fs)
 	xrGif = *xrGifArg
 	xrThumb = *xrThumbArg
+
+	// Create/update the DB schema if needed:
+	api, err := NewAPI()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	api.Close()
 
 	// Watch the html templates for changes and reload them:
 	_, err, cleanup := watchTemplates("ui", html_path(), "*.html")

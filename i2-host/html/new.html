@@ -9,7 +9,7 @@
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
 	<div>
 		<h2>Submit an image URL</h2>
-		<form action="/new" method="POST">
+		<form action="/a/new" method="POST">
 			<label for="url"><input type="url" id="url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
             <label for="url_title"><input type="text" id="url_title" name="title" size="128" placeholder="Title" /></label><br/>
 			<input type="submit" value="Submit" />
@@ -17,7 +17,7 @@
 	</div>
     <div>
 		<h2>Or upload an image</h2>
-		<form action="/new" method="POST" enctype="multipart/form-data">
+		<form action="/a/new" method="POST" enctype="multipart/form-data">
 			<label for="file"><input type="file" id="file" name="file" /></label><br />
             <label for="upload_title"><input type="text" id="upload_title" name="title" size="128" placeholder="Title" /></label><br/>
 			<input type="submit" value="Upload" />
