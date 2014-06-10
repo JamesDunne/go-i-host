@@ -299,7 +299,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	_, ext, thumbExt := imageKindTo(imageKind)
 
 	// Create the DB record:
-	id, err := api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: true})
+	id, err := api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: false})
 	if webErrorIf(rsp, err, 500) {
 		return
 	}

@@ -15,15 +15,37 @@ html {
   display: table;
 }
 body {
-  display: table-cell;
+  /* display: table-cell;
   vertical-align: middle;
-  text-align: center;
+  text-align: center; */
+
   background-color: black;
   color: silver;
-  font-family: Arial,sans-serif
+  font-family: Arial,sans-serif;
+  font-size: 100%;
+
+  width:100%;
+
+  /* Firefox */
+  display:-moz-box;
+  -moz-box-pack:center;
+  -moz-box-align:center;
+
+  /* Safari and Chrome */
+  display:-webkit-box;
+  -webkit-box-pack:center;
+  -webkit-box-align:center;
+
+  /* W3C */
+  display:box;
+  box-pack:center;
+  box-align:center;
+}
+#main {
 }
 div.i {
-  float: left;
+  /*float: left;*/
+  display: inline-block;
   margin: 2px 4px;
   border: 2px solid #444442;
   overflow: hidden;
@@ -42,21 +64,24 @@ div.i div.thumb a {
 div.i div.thumb a img {
   width: 100%;
 }
-@media (resolution: 1dppx) {
-  div.i { width: 200px; height: 222px; }
-}
-@media (min-resolution: 2dppx) {
-  div.i { width: 100px; height: 122px; }
-}
 div.i div.title {
   margin: 0px;
   font-size: 14px;
-  height: 16px;
-  width: 300%;
+  height: 18px;
+  white-space: nowrap;
+}
+@media (min-resolution: 1dppx) and (max-resolution: 1.999dppx) {
+  div.i { width: 200px; height: 224px; }
+  div.i div.title { width: 200px; }
+}
+@media (min-resolution: 2dppx) {
+  div.i { width: 100px; height: 124px; }
+  div.i div.title { width: 100px; }
 }
 </style>
 </head>
 <body>
+    <div id="main">
         {{range .List}}
 		<div class="i" id="i{{.ID}}">
 			<div class="container">
@@ -67,6 +92,7 @@ div.i div.title {
 			</div>
         </div>
         {{end}}
+    </div>
 </body>
 </html>
 {{end}}
