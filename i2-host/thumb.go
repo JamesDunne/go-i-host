@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"image"
+	"log"
 	"reflect"
 )
 import "github.com/JamesDunne/go-util/imaging/resize"
@@ -13,18 +14,18 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 	srcBounds := b
 	dx, dy := b.Dx(), b.Dy()
 	if dx > dy {
-		offs := (dx - dy) / 2
-		srcBounds.Min.X += offs
-		srcBounds.Max.X -= offs
+		offs := (dy / 2)
+		srcBounds.Min.X = (dx / 2) - offs
+		srcBounds.Max.X = (dx / 2) + offs
 	} else if dy > dx {
-		offs := (dy - dx) / 2
-		srcBounds.Min.Y += offs
-		srcBounds.Max.Y -= offs
+		offs := (dx / 2)
+		srcBounds.Min.Y = (dy / 2) - offs
+		srcBounds.Max.Y = (dy / 2) + offs
 	} else {
 		// Already square.
 	}
 
-	//log.Printf("'%s': resize %v to %v\n", filename, b, srcBounds)
+	//log.Printf("resize %v to %v\n", b, srcBounds)
 
 	// Cut out the center square to a new image:
 	var boximg image.Image
@@ -53,10 +54,12 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
 	}
 
-	//log.Printf("'%s': resized to %v\n", filename, boximg.Bounds())
+	sb := boximg.Bounds()
+	hackedSB := image.Rectangle{image.Pt(sb.Min.X, 0), image.Pt(sb.Max.X, sb.Dy())}
+	log.Printf("resizing to %v, really %v\n", sb, hackedSB)
 
 	// Apply resizing algorithm:
-	thumbImg = resize.Resize(boximg, boximg.Bounds(), dimensions, dimensions)
+	thumbImg = resize.Resize(boximg, hackedSB, dimensions, dimensions)
 
 	return
 }
