@@ -33,20 +33,37 @@ body {
 }
 </style>
 </head>
-<body>
+<body onresize="resize()">
 <div id="container" data-id="{{.ID}}">
 	<img id="imain" onload="showme(this)" style="display: none" src="/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" />
     <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 </div>
 <script>
 	function showme(img) {
-		var invRatio = 1.0 / window.devicePixelRatio;
-        if (invRatio < 0.5) invRatio = 0.5;
-		img.style.width = img.width * invRatio + "px";
-		img.style.height = img.height * invRatio + "px";
+		// Determine the scaling factor to fill the screen:
+		var iw = img.width, ih = img.height;
+		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+		var wscale = sw / iw;
+		var hscale = sh / ih;
+		if (wscale < hscale)
+			scale = wscale;
+		else
+			scale = hscale;
+
+		// Set the main image's width/height:
+		img.style.width = iw * scale + "px";
+		img.style.height = ih * scale + "px";
 		img.style.display = "block";
+
+		// Hide the loader GIF:
 		var loader = document.getElementById("loader");
 		loader.style.display = "none";
+	}
+
+	function resize() {
+		var imain = document.getElementById("imain")
+		if (imain === undefined) return;
+		showme(imain);
 	}
 </script>
 </body>
