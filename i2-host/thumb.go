@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
+	//"log"
 	"os"
 	//"path"
 	"reflect"
@@ -12,7 +12,6 @@ import (
 import (
 	"github.com/JamesDunne/go-util/imaging/gif" // my own patches to image/gif
 	"image"
-	"image/color"
 	"image/jpeg"
 	"image/png"
 )
@@ -65,22 +64,12 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
 	}
 
-	//log.Printf("'%s': resized to %v\n", filename, boximg.Bounds())
-
-	//frame, err := os.Create(path.Join(tmp_folder(), "/fr.png"))
-	//if err == nil {
-	//	png.Encode(frame, boximg)
-	//	frame.Close()
-	//}
+	img = nil
 
 	// Apply resizing algorithm:
 	thumbImg = imaging.Resize(boximg, dimensions, dimensions, imaging.Lanczos)
 
-	//frame, err = os.Create(path.Join(tmp_folder(), "/fr-resize.png"))
-	//if err == nil {
-	//	png.Encode(frame, thumbImg)
-	//	frame.Close()
-	//}
+	boximg = nil
 
 	return
 }
@@ -102,6 +91,10 @@ func generateThumbnail(firstImage image.Image, imageKind string, thumb_path stri
 
 	// Generate the thumbnail image:
 	thumbImg := makeThumbnail(firstImage, thumbnail_dimensions)
+	defer func() {
+		firstImage = nil
+		thumbImg = nil
+	}()
 
 	// Save it to a file:
 	os.Remove(thumb_path)
@@ -118,20 +111,6 @@ func generateThumbnail(firstImage image.Image, imageKind string, thumb_path stri
 	}
 
 	return nil
-}
-
-func blitGIFFrame(src *image.Paletted, dest *image.RGBA) {
-	// Copy the non-transparent bits onto the current frame:
-	for y := src.Rect.Min.Y; y < src.Rect.Max.Y; y++ {
-		for x := src.Rect.Min.X; x < src.Rect.Max.X; x++ {
-			c := src.At(x, y)
-			_, _, _, a := c.RGBA()
-			if a == 0 {
-				continue
-			}
-			dest.Set(x, y, c)
-		}
-	}
 }
 
 func decodeFirstImage(local_path string) (firstImage image.Image, imageKind string, err error) {
@@ -153,41 +132,15 @@ func decodeFirstImage(local_path string) (firstImage image.Image, imageKind stri
 		var g *gif.GIF
 		g, err = gif.DecodeAll(imf)
 		if err != nil {
-			log.Printf("  err: %s\n", err.Error())
 			return nil, "", err
 		}
 
-		// Process each frame until we've constructed an opaque image:
 		firstFrame := g.Image[0]
+		g.Image = nil
+		g.Delay = nil
+		g = nil
 
-		fr := image.NewRGBA(firstFrame.Bounds())
-
-		// Clear to black:
-		for y := fr.Rect.Min.Y; y < fr.Rect.Max.Y; y++ {
-			for x := fr.Rect.Min.X; x < fr.Rect.Max.X; x++ {
-				fr.SetRGBA(x, y, color.RGBA{R: 0, G: 0, B: 0, A: 0})
-			}
-		}
-
-		// Try for the second image:
-		for _, img := range g.Image {
-			// Copy the non-transparent bits onto the current frame:
-			blitGIFFrame(img, fr)
-
-			if fr.Opaque() {
-				break
-			}
-
-			//frame, err := os.Create(path.Join(tmp_folder(), fmt.Sprintf("/fr%d.png", i+1)))
-			//if err == nil {
-			//	png.Encode(frame, fr)
-			//	frame.Close()
-			//}
-		}
-
-		//blitGIFFrame(firstFrame, fr)
-
-		return fr, imageKind, nil
+		return firstFrame, imageKind, nil
 	default:
 		firstImage, imageKind, err = image.Decode(imf)
 		if err != nil {

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime"
 	"syscall"
 )
 
@@ -102,6 +103,7 @@ func ensureThumbnail(image_path, thumb_path string) (err error) {
 	var imageKind string
 
 	firstImage, imageKind, err = decodeFirstImage(image_path)
+	defer func() { firstImage = nil }()
 	if err != nil {
 		return err
 	}
@@ -233,6 +235,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	var imageKind string
 
 	firstImage, imageKind, err = decodeFirstImage(local_path)
+	defer func() { firstImage = nil }()
 	if webErrorIf(rsp, err, 500) {
 		return
 	}
@@ -519,6 +522,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		local_path := path.Join(store_folder(), img_name+ext)
 		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
 		if err := ensureThumbnail(local_path, thumb_path); webErrorIf(rsp, err, 500) {
+			runtime.GC()
 			return
 		}
 
@@ -530,10 +534,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			rsp.Header().Set("X-Accel-Redirect", redirPath)
 			rsp.Header().Set("Content-Type", mime)
 			rsp.WriteHeader(200)
+			runtime.GC()
 			return
 		} else {
 			rsp.Header().Set("Content-Type", mime)
 			http.ServeFile(rsp, req, thumb_path)
+			runtime.GC()
 			return
 		}
 	}
@@ -547,6 +553,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		rsp.Header().Set("X-Accel-Redirect", redirPath)
 		rsp.Header().Set("Content-Type", mime)
 		rsp.WriteHeader(200)
+		runtime.GC()
 		return
 	} else {
 		// Serve content directly with the proper mime-type:
@@ -554,6 +561,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, local_path)
+		runtime.GC()
 		return
 	}
 }
