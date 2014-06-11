@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"image"
 	"io"
 	"log"
 	"mime"
@@ -15,13 +16,6 @@ import (
 	"os/signal"
 	"path"
 	"syscall"
-)
-
-import (
-	"image"
-	_ "image/gif"
-	"image/jpeg"
-	"image/png"
 )
 
 import "github.com/JamesDunne/go-util/fs/notify"
@@ -97,9 +91,9 @@ func jsonErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
 	return true
 }
 
-func ensureThumbnail(image_path, thumb_path string) error {
+func ensureThumbnail(image_path, thumb_path string) (err error) {
 	// Thumbnail exists; leave it alone:
-	if _, err := os.Stat(thumb_path); err == nil {
+	if _, err = os.Stat(thumb_path); err == nil {
 		return nil
 	}
 
@@ -107,53 +101,12 @@ func ensureThumbnail(image_path, thumb_path string) error {
 	var firstImage image.Image
 	var imageKind string
 
-	imf, err := os.Open(image_path)
-	if err != nil {
-		return err
-	}
-	defer imf.Close()
-
-	firstImage, imageKind, err = image.Decode(imf)
+	firstImage, imageKind, err = decodeFirstImage(image_path)
 	if err != nil {
 		return err
 	}
 
 	return generateThumbnail(firstImage, imageKind, thumb_path)
-}
-
-func generateThumbnail(firstImage image.Image, imageKind string, thumb_path string) error {
-	if firstImage == nil {
-		return fmt.Errorf("Cannot generate thumbnail with nil image")
-	}
-
-	var encoder func(w io.Writer, m image.Image) error
-	switch imageKind {
-	case "jpeg":
-		encoder = func(w io.Writer, img image.Image) error { return jpeg.Encode(w, img, &jpeg.Options{Quality: 100}) }
-	case "png":
-		encoder = png.Encode
-	case "gif":
-		encoder = png.Encode
-	}
-
-	// Generate the thumbnail image:
-	thumbImg := makeThumbnail(firstImage, thumbnail_dimensions)
-
-	// Save it to a file:
-	os.Remove(thumb_path)
-	tf, err := os.Create(thumb_path)
-	if err != nil {
-		return err
-	}
-	defer tf.Close()
-
-	// Write the thumbnail to the file:
-	err = encoder(tf, thumbImg)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func postImage(rsp http.ResponseWriter, req *http.Request) {
@@ -279,20 +232,8 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	var firstImage image.Image
 	var imageKind string
 
-	if err, statusCode := func() (error, int) {
-		imf, err := os.Open(local_path)
-		if err != nil {
-			return err, 500
-		}
-		defer imf.Close()
-
-		firstImage, imageKind, err = image.Decode(imf)
-		if err != nil {
-			return err, 400
-		}
-
-		return nil, 200
-	}(); webErrorIf(rsp, err, statusCode) {
+	firstImage, imageKind, err = decodeFirstImage(local_path)
+	if webErrorIf(rsp, err, 500) {
 		return
 	}
 
