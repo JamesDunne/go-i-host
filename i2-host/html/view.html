@@ -42,13 +42,16 @@ body {
 	function showme(img) {
 		// Determine the scaling factor to fill the screen:
 		var iw = img.width, ih = img.height;
-		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
-		var wscale = sw / iw;
-		var hscale = sh / ih;
-		if (wscale < hscale)
-			scale = wscale;
-		else
-			scale = hscale;
+        var scale = 1;
+        if (window.devicePixelRatio >= 2) {
+    		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+    		var wscale = sw / iw;
+    		var hscale = sh / ih;
+    		if (wscale < hscale)
+    			scale = wscale;
+    		else
+    			scale = hscale;
+        }
 
 		// Set the main image's width/height:
 		img.style.width = iw * scale + "px";
