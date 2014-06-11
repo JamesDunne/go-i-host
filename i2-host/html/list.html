@@ -1,5 +1,4 @@
-{{define "list"}}
-<!DOCTYPE html>
+{{define "frontPage"}}<!DOCTYPE html>
 
 <html>
 <head>
@@ -32,10 +31,7 @@ body {
 
   width:100%;
 }
-#main {
-}
 div.i {
-  /*float: left;*/
   display: inline-block;
   margin: 2px 4px;
   border: 2px solid #444442;
@@ -74,14 +70,102 @@ div.i div.title {
 <body>
     <div id="main">
         {{range .List}}
-		<div class="i" id="i{{.ID}}">
+        {{if (and (not .IsHidden) .IsClean)}}
+		<div class="i" data-id="{{.ID}}">
 			<div class="container">
 				<div class="thumb">
-					<a href="/b/{{.Base62ID}}"><img src="/t/{{.Base62ID}}{{.ThumbExtension}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+					<a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
 				</div>
 				<div class="title">{{.Title}}</div>
 			</div>
         </div>
+        {{end}}
+        {{end}}
+    </div>
+</body>
+</html>
+{{end}}{{define "all"}}<!DOCTYPE html>
+
+<html>
+<head>
+	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta property="og:url" content="http://i.bittwiddlers.org/a/all">
+    <meta property="og:type" content="website"/>
+    <meta property="og:site_name" content="i.bittwiddlers.org"/>
+    <meta property="og:title" content="My Private Meme Collection"/>
+    <meta property="og:description" content="A random collection of funny memes and animated GIFs I keep around for quick access."/>
+    <meta property="og:image" content="http://i.bittwiddlers.org/t/KH3.png">
+	<title>Private Listing</title>
+
+<style type="text/css">
+html, body {
+  width: 100%;
+  height: 100%;
+}
+html {
+  display: table;
+}
+body {
+  background-color: black;
+  color: silver;
+  font-family: Arial,sans-serif;
+  font-size: 100%;
+
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+
+  width:100%;
+}
+div.i {
+  display: inline-block;
+  margin: 2px 4px;
+  border: 2px solid #444442;
+  overflow: hidden;
+  text-align: left;
+}
+div.i div.container {
+  width: 100%;
+}
+div.i div.thumb {
+  margin: 0px;
+  padding: 0px;
+}
+div.i div.thumb a {
+  line-height: 0;
+}
+div.i div.thumb a img {
+  width: 100%;
+}
+div.i div.title {
+  margin: 0px;
+  font-size: 14px;
+  height: 18px;
+  white-space: nowrap;
+}
+@media (min-resolution: 1dppx) and (max-resolution: 1.999dppx) {
+  div.i { width: 200px; height: 224px; }
+  div.i div.title { width: 200px; }
+}
+@media (min-resolution: 2dppx) {
+  div.i { width: 100px; height: 124px; }
+  div.i div.title { width: 100px; }
+}
+</style>
+</head>
+<body>
+    <div id="main">
+        {{range .List}}
+        {{if (not .IsHidden)}}
+		<div class="i" data-id="{{.ID}}">
+			<div class="container">
+				<div class="thumb">
+					<a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+				</div>
+				<div class="title">{{.Title}}</div>
+			</div>
+        </div>
+        {{end}}
         {{end}}
     </div>
 </body>

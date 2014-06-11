@@ -270,24 +270,47 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
-type ImageListItem struct {
-	ID             int64
-	Base62ID       string
-	Extension      string
-	ThumbExtension string
-	Title          string
-}
-
-type ImageListItemJson struct {
+type ImageViewModel struct {
 	ID           int64   `json:"id"`
 	Base62ID     string  `json:"base62id"`
 	Title        string  `json:"title"`
+	Kind         string  `json:"kind"`
 	ImageURL     string  `json:"imageURL"`
 	ThumbURL     string  `json:"thumbURL"`
-	IsHidden     bool    `json:"isHidden"`
-	IsClean      bool    `json:"isClean"`
 	SourceURL    *string `json:"sourceURL,omitempty"`
 	RedirectToID *int64  `json:"redirectToID,omitempty"`
+	IsClean      bool    `json:"isClean"`
+	IsHidden     bool    `json:"isHidden"`
+}
+
+func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
+	if o == nil {
+		o = new(ImageViewModel)
+	}
+
+	o.ID = i.ID
+	o.Base62ID = b62.Encode(i.ID + 10000)
+	o.Title = i.Title
+	o.Kind = i.Kind
+	o.SourceURL = i.SourceURL
+	o.RedirectToID = i.RedirectToID
+	o.IsClean = i.IsClean
+	o.IsHidden = i.IsHidden
+	_, ext, thumbExt := imageKindTo(i.Kind)
+	switch i.Kind {
+	case "youtube":
+		o.ImageURL = "//www.youtube.com/embed/" + *i.SourceURL
+		o.ThumbURL = "//i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
+	case "gif":
+		fallthrough
+	case "jpeg":
+		fallthrough
+	case "png":
+		o.ImageURL = "/" + o.Base62ID + ext
+		o.ThumbURL = "/t/" + o.Base62ID + thumbExt
+	}
+
+	return o
 }
 
 // handles requests to upload images and rehost with shortened URLs
@@ -310,8 +333,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/favicon.ico" {
 		rsp.WriteHeader(http.StatusNoContent)
 		return
-	} else if req.URL.Path == "/" {
-		// Render a list page for the public items:
+	} else if req.URL.Path == "/" || req.URL.Path == "/a/all" {
+		// Render a list page:
 		api, err := NewAPI()
 		if webErrorIf(rsp, err, 500) {
 			return
@@ -325,72 +348,24 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		// Project into a view model:
 		model := struct {
-			List []ImageListItem
+			List []ImageViewModel
 		}{
-			List: make([]ImageListItem, 0, len(list)),
+			List: make([]ImageViewModel, len(list)),
 		}
-		for _, img := range list {
-			// No "unclean" images on the front page:
-			if !img.IsClean {
-				continue
-			}
-			if img.IsHidden {
-				continue
-			}
+		for i, img := range list {
+			xlatImageViewModel(&img, &model.List[i])
+		}
 
-			_, ext, thumbExt := imageKindTo(img.Kind)
-			model.List = append(model.List, ImageListItem{
-				ID:             img.ID,
-				Base62ID:       b62.Encode(img.ID + 10000),
-				Extension:      ext,
-				ThumbExtension: thumbExt,
-				Title:          img.Title,
-			})
+		var viewName string
+		if req.URL.Path == "/a/all" {
+			viewName = "all"
+		} else {
+			viewName = "frontPage"
 		}
 
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, "list", model); webErrorIf(rsp, err, 500) {
-			return
-		}
-		return
-	} else if req.URL.Path == "/a/all" {
-		// Render a list page for the all-inclusive private collection:
-		api, err := NewAPI()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-		defer api.Close()
-
-		list, err := api.GetList()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageListItem
-		}{
-			List: make([]ImageListItem, 0, len(list)),
-		}
-		for _, img := range list {
-			if img.IsHidden {
-				continue
-			}
-
-			_, ext, thumbExt := imageKindTo(img.Kind)
-			model.List = append(model.List, ImageListItem{
-				ID:             img.ID,
-				Base62ID:       b62.Encode(img.ID + 10000),
-				Extension:      ext,
-				ThumbExtension: thumbExt,
-				Title:          img.Title,
-			})
-		}
-
-		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, "list", model); webErrorIf(rsp, err, 500) {
+		if err := uiTmpl.ExecuteTemplate(rsp, viewName, model); webErrorIf(rsp, err, 500) {
 			return
 		}
 		return
@@ -416,24 +391,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		// Project into a view model:
 		model := struct {
-			List []ImageListItemJson `json:"list"`
+			List []ImageViewModel `json:"list"`
 		}{
-			List: make([]ImageListItemJson, 0, len(list)),
+			List: make([]ImageViewModel, len(list)),
 		}
-		for _, img := range list {
-			_, ext, thumbExt := imageKindTo(img.Kind)
-			base62id := b62.Encode(img.ID + 10000)
-			model.List = append(model.List, ImageListItemJson{
-				ID:           img.ID,
-				Base62ID:     base62id,
-				Title:        img.Title,
-				ImageURL:     "/" + base62id + ext,
-				ThumbURL:     "/t/" + base62id + thumbExt,
-				IsHidden:     img.IsHidden,
-				IsClean:      img.IsClean,
-				SourceURL:    img.SourceURL,
-				RedirectToID: img.RedirectToID,
-			})
+		for i, img := range list {
+			xlatImageViewModel(&img, &model.List[i])
 		}
 
 		jsonText, err := json.Marshal(model)
@@ -482,7 +445,6 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	mime, ext, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
-	base62ID := b62.Encode(img.ID + 10000)
 	img_name := fmt.Sprintf("%d", img.ID)
 
 	if dir == "/b" || dir == "/w" {
@@ -496,19 +458,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		model := struct {
-			BGColor        string
-			ID             int64
-			Base62ID       string
-			Extension      string
-			ThumbExtension string
-			Title          string
+			BGColor string
+			Image   ImageViewModel
 		}{
-			BGColor:        bgcolor,
-			ID:             img.ID,
-			Base62ID:       base62ID,
-			Extension:      ext,
-			ThumbExtension: thumbExt,
-			Title:          img.Title,
+			BGColor: bgcolor,
+			Image:   *xlatImageViewModel(img, nil),
 		}
 
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")

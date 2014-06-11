@@ -1,5 +1,4 @@
-{{define "view"}}
-<!DOCTYPE html>
+{{define "view"}}{{with .Image}}<!DOCTYPE html>
 
 <html>
 <head>
@@ -9,7 +8,7 @@
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="{{.Title}}"/>
     <meta property="og:description" content=""/>
-    <meta property="og:image" content="http://i.bittwiddlers.org/t/{{.Base62ID}}{{.Extension}}">
+    {{if (eq .Kind "youtube")}}<meta property="og:image" content="{{.ThumbURL}}">{{else}}<meta property="og:image" content="http://i.bittwiddlers.org{{.ThumbURL}}">{{end}}
 
     <title>{{.Title}}</title>
 
@@ -25,7 +24,7 @@ body {
   display: table-cell;
   vertical-align: middle;
   text-align: center;
-  background-color: {{.BGColor}};
+  background-color: {{$.BGColor}};
   color: silver;
 }
 #container {
@@ -33,15 +32,30 @@ body {
 }
 </style>
 </head>
+{{if (eq .Kind "youtube")}}
+<body>
+<div id="container" data-id="{{.ID}}">
+    <iframe width="420" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
+</div>
+</body>
+{{else}}
 <body onresize="resize()">
 <div id="container" data-id="{{.ID}}">
-	<img id="imain" onload="showme(this)" style="display: none" src="/{{.Base62ID}}{{.Extension}}" alt="{{.Title}}" title="{{.Title}}" />
+	<img id="imain" onload="imgloaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
     <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 </div>
 <script>
+	var iw = 0, ih = 0;
+
+    function imgloaded(img) {
+        // Grab these values on load of img because they may change later on:
+        iw = img.width;
+        ih = img.height;
+        showme(img);
+    }
+
 	function showme(img) {
 		// Determine the scaling factor to fill the screen:
-		var iw = img.width, ih = img.height;
         var scale = 1;
         if (window.devicePixelRatio >= 2) {
     		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
@@ -65,10 +79,11 @@ body {
 
 	function resize() {
 		var imain = document.getElementById("imain")
-		if (imain === undefined) return;
+		if ((imain === undefined) || (imain === null)) return;
 		showme(imain);
 	}
 </script>
 </body>
-</html>
 {{end}}
+</html>
+{{end}}{{end}}
