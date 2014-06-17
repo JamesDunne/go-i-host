@@ -33,10 +33,47 @@ body {
 </style>
 </head>
 {{if (eq .Kind "youtube")}}
-<body>
+<body onresize="resize()">
 <div id="container" data-id="{{.ID}}">
-    <iframe width="420" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
+    <iframe id="imain" onload="loaded(this)" style="display:none" width="420" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
+    <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 </div>
+<script>
+	var iw = 560, ih = 315;
+
+    function loaded(img) {
+        sizeme(img);
+        img.style.display = "inline";
+
+		// Hide the loader GIF and show the main image:
+		var loader = document.getElementById("loader");
+		loader.style.display = "none";
+    }
+
+	function sizeme(img) {
+		// Determine the scaling factor to fill the screen:
+        var scale = 1;
+        if (window.devicePixelRatio >= 2) {
+    		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+    		var wscale = sw / iw;
+    		var hscale = sh / ih;
+    		if (wscale < hscale)
+    			scale = wscale;
+    		else
+    			scale = hscale;
+        }
+
+		// Set the main iframe's width/height:
+		img.width = "" + (iw * scale);
+		img.height = "" + (ih * scale);
+	}
+
+	function resize() {
+		var imain = document.getElementById("imain")
+		if ((imain === undefined) || (imain === null)) return;
+		sizeme(imain);
+	}
+</script>
 </body>
 {{else}}
 <body onresize="resize()">
@@ -51,10 +88,15 @@ body {
         // Grab these values on load of img because they may change later on:
         iw = img.width;
         ih = img.height;
-        showme(img);
+        sizeme(img);
+
+		// Hide the loader GIF and show the main image:
+		img.style.display = "block";
+		var loader = document.getElementById("loader");
+		loader.style.display = "none";
     }
 
-	function showme(img) {
+	function sizeme(img) {
 		// Determine the scaling factor to fill the screen:
         var scale = 1;
         if (window.devicePixelRatio >= 2) {
@@ -70,11 +112,6 @@ body {
 		// Set the main image's width/height:
 		img.style.width = iw * scale + "px";
 		img.style.height = ih * scale + "px";
-		img.style.display = "block";
-
-		// Hide the loader GIF:
-		var loader = document.getElementById("loader");
-		loader.style.display = "none";
 	}
 
 	function resize() {
