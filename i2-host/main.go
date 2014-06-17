@@ -116,6 +116,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	var local_path string
 	var title string
 	var sourceURL string
+	var imageKind string
 
 	if isMultipart(req) {
 		// Accept file upload:
@@ -179,7 +180,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		// Parse the URL so we get the file name:
 		sourceURL = imgurl_s
 		imgurl, err := url.Parse(imgurl_s)
-		if webErrorIf(rsp, err, 500) {
+		if webErrorIf(rsp, err, 400) {
 			return
 		}
 
@@ -215,6 +216,40 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 		}(); webErrorIf(rsp, err, statusCode) {
 			return
 		}
+	} else if yturl_s := req.FormValue("youtube_url"); yturl_s != "" {
+		// YouTube URL:
+		imageKind = "youtube"
+
+		// Require the 'title' form value:
+		title = req.FormValue("title")
+		if title == "" {
+			rsp.WriteHeader(http.StatusBadRequest)
+			rsp.Write([]byte("Missing title!"))
+			return
+		}
+
+		// Parse the URL:
+		yturl, err := url.Parse(yturl_s)
+		if webErrorIf(rsp, err, 400) {
+			return
+		}
+
+		// Validate our expectations:
+		if yturl.Scheme != "http" && yturl.Scheme != "https" {
+			webErrorIf(rsp, fmt.Errorf("YouTube URL must have http or https scheme!"), 400)
+		}
+
+		if yturl.Host != "www.youtube.com" {
+			webErrorIf(rsp, fmt.Errorf("YouTube URL must be from www.youtube.com host!"), 400)
+			return
+		}
+
+		if yturl.Path != "/watch" {
+			webErrorIf(rsp, fmt.Errorf("Unrecognized YouTube URL form."), 400)
+			return
+		}
+
+		sourceURL = yturl.Query().Get("v")
 	}
 
 	if title == "" {
@@ -230,35 +265,44 @@ func postImage(rsp http.ResponseWriter, req *http.Request) {
 	}
 	defer api.Close()
 
-	// Attempt to parse the image:
-	var firstImage image.Image
-	var imageKind string
+	var id int64
 
-	firstImage, imageKind, err = decodeFirstImage(local_path)
-	defer func() { firstImage = nil }()
-	if webErrorIf(rsp, err, 500) {
-		return
-	}
+	if local_path != "" {
+		// Do some local image processing first:
+		var firstImage image.Image
 
-	_, ext, thumbExt := imageKindTo(imageKind)
+		firstImage, imageKind, err = decodeFirstImage(local_path)
+		defer func() { firstImage = nil }()
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
 
-	// Create the DB record:
-	id, err := api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: false})
-	if webErrorIf(rsp, err, 500) {
-		return
-	}
+		_, ext, thumbExt := imageKindTo(imageKind)
 
-	// Rename the file:
-	img_name := fmt.Sprintf("%d", id)
-	store_path := path.Join(store_folder(), img_name+ext)
-	if err := os.Rename(local_path, store_path); webErrorIf(rsp, err, 500) {
-		return
-	}
+		// Create the DB record:
+		id, err = api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: false})
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
 
-	// Generate a thumbnail:
-	thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
-	if err := generateThumbnail(firstImage, imageKind, thumb_path); webErrorIf(rsp, err, 500) {
-		return
+		// Rename the file:
+		img_name := fmt.Sprintf("%d", id)
+		store_path := path.Join(store_folder(), img_name+ext)
+		if err := os.Rename(local_path, store_path); webErrorIf(rsp, err, 500) {
+			return
+		}
+
+		// Generate a thumbnail:
+		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
+		if err := generateThumbnail(firstImage, imageKind, thumb_path); webErrorIf(rsp, err, 500) {
+			return
+		}
+	} else {
+		// Create the DB record:
+		id, err = api.NewImage(Image{Kind: imageKind, Title: title, SourceURL: &sourceURL, IsClean: false})
+		if webErrorIf(rsp, err, 500) {
+			return
+		}
 	}
 
 	// Redirect to the black-background viewer:
