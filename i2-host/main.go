@@ -324,7 +324,6 @@ type ImageViewModel struct {
 	SourceURL    *string `json:"sourceURL,omitempty"`
 	RedirectToID *int64  `json:"redirectToID,omitempty"`
 	IsClean      bool    `json:"isClean"`
-	IsHidden     bool    `json:"isHidden"`
 }
 
 func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
@@ -339,7 +338,6 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	o.SourceURL = i.SourceURL
 	o.RedirectToID = i.RedirectToID
 	o.IsClean = i.IsClean
-	o.IsHidden = i.IsHidden
 	_, ext, thumbExt := imageKindTo(i.Kind)
 	switch i.Kind {
 	case "youtube":
@@ -397,6 +395,9 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			List: make([]ImageViewModel, len(list)),
 		}
 		for i, img := range list {
+			if img.IsHidden {
+				continue
+			}
 			xlatImageViewModel(&img, &model.List[i])
 		}
 
@@ -440,6 +441,9 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			List: make([]ImageViewModel, len(list)),
 		}
 		for i, img := range list {
+			if img.IsHidden {
+				continue
+			}
 			xlatImageViewModel(&img, &model.List[i])
 		}
 

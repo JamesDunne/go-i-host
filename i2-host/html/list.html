@@ -81,7 +81,7 @@ div.i div.title {
     <h2>There's a GIF for everything</h2>
     <div id="main">
         {{range .List}}
-        {{if (and (not .IsHidden) .IsClean)}}
+        {{if .IsClean}}
 		<div class="i" data-id="{{.ID}}">
 			<div class="container">
 				<div class="thumb">
@@ -178,7 +178,6 @@ div.i div.title {
     <h2>There's a GIF for everything</h2>
     <div id="main">
         {{range .List}}
-        {{if (not .IsHidden)}}
 		<div class="i" data-id="{{.ID}}">
 			<div class="container">
 				<div class="thumb">
@@ -187,7 +186,6 @@ div.i div.title {
 				<div class="title">{{.Title}}</div>
 			</div>
         </div>
-        {{end}}
         {{end}}
     </div>
 </body>
