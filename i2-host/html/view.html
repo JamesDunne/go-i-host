@@ -8,8 +8,11 @@
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="{{.Title}}"/>
     <meta property="og:description" content=""/>
-    {{if (eq .Kind "youtube")}}<meta property="og:image" content="{{.ThumbURL}}">{{else}}<meta property="og:image" content="http://i.bittwiddlers.org{{.ThumbURL}}">{{end}}
-
+{{if (eq .Kind "youtube")}}
+    <meta property="og:image" content="{{.ThumbURL}}">
+{{else}}
+    <meta property="og:image" content="http://i.bittwiddlers.org{{.ThumbURL}}">
+{{end}}
     <title>{{.Title}}</title>
 
 <style type="text/css">
@@ -32,75 +35,61 @@ body {
 }
 </style>
 </head>
-{{if (eq .Kind "youtube")}}
 <body onresize="resize()">
 <div id="container" data-id="{{.ID}}">
-    <iframe id="imain" onload="loaded(this)" style="display:none" width="420" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
+{{if (eq .Kind "youtube")}}
+    <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
+{{else}}
+	<img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
+{{end}}
     <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 </div>
 <script>
+{{if (eq .Kind "youtube")}}
 	var iw = 560, ih = 315;
+{{else}}
+    var iw = 1, ih = 1;
+{{end}}
+    var nw = 1, nh = 1;
 
     function loaded(img) {
-        sizeme(img);
-        img.style.display = "inline";
-
-		// Hide the loader GIF and show the main image:
-		var loader = document.getElementById("loader");
-		loader.style.display = "none";
-    }
-
-	function sizeme(img) {
-		// Determine the scaling factor to fill the screen:
-        var scale = 1;
-        if (window.devicePixelRatio >= 2) {
-    		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
-    		var wscale = sw / iw;
-    		var hscale = sh / ih;
-    		if (wscale < hscale)
-    			scale = wscale;
-    		else
-    			scale = hscale;
-        }
-
-		// Set the main iframe's width/height:
-		img.width = "" + (iw * scale);
-		img.height = "" + (ih * scale);
-	}
-
-	function resize() {
-		var imain = document.getElementById("imain")
-		if ((imain === undefined) || (imain === null)) return;
-		sizeme(imain);
-	}
-</script>
-</body>
-{{else}}
-<body onresize="resize()">
-<div id="container" data-id="{{.ID}}">
-	<img id="imain" onload="imgloaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
-    <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
-</div>
-<script>
-	var iw = 0, ih = 0;
-
-    function imgloaded(img) {
+{{if not (eq .Kind "youtube")}}
         // Grab these values on load of img because they may change later on:
         iw = img.width;
         ih = img.height;
-        sizeme(img);
+{{end}}
+        set_new_size(img);
 
-		// Hide the loader GIF and show the main image:
-		img.style.display = "block";
-		var loader = document.getElementById("loader");
-		loader.style.display = "none";
+        // Hide the loader GIF and show the main image:
+        var loader = document.getElementById("loader");
+        loader.style.display = "none";
     }
 
-	function sizeme(img) {
-		// Determine the scaling factor to fill the screen:
+	function resize() {
+		var imain = document.getElementById("imain")
+		if ((imain === undefined) || (imain === null)) return;
+		set_new_size(imain);
+	}
+
+    function set_new_size(img) {
+        calc_new_size(img);
+{{if (eq .Kind "youtube")}}
+		img.style.display = "block";
+        img.width = "" + nw;
+        img.height = "" + nh;
+{{else}}
+        img.style.display = "inline";
+		img.style.width = "" + nw + "px";
+        img.style.height = "" + nh + "px";
+{{end}}
+    }
+
+    function calc_new_size(img) {
+        // Determine the scaling factor to fill the screen:
         var scale = 1;
-        if (window.devicePixelRatio >= 2) {
-    		var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+        var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+
+        if ((window.devicePixelRatio >= 2) || ((iw > sw) || (ih > sh))) {
     		var wscale = sw / iw;
     		var hscale = sh / ih;
     		if (wscale < hscale)
@@ -109,18 +98,11 @@ body {
     			scale = hscale;
         }
 
-		// Set the main image's width/height:
-		img.style.width = iw * scale + "px";
-		img.style.height = ih * scale + "px";
-	}
-
-	function resize() {
-		var imain = document.getElementById("imain")
-		if ((imain === undefined) || (imain === null)) return;
-		sizeme(imain);
+        // Set new dimensions:
+		nw = (iw * scale);
+		nh = (ih * scale);
 	}
 </script>
 </body>
-{{end}}
 </html>
 {{end}}{{end}}
