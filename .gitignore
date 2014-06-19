@@ -1,7 +1,7 @@
 *.exe
 sqlite.db
-/i-host/i-host
-/i-host/thumb
-/i-host/tmp
-/i-host/store
-/linknew/linknew
+/i2-host/i2-host
+/i2-host/backup/
+/i2-host/thumb/
+/i2-host/tmp/
+/i2-host/store/
