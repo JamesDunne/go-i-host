@@ -13,12 +13,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path"
 	"runtime"
-	"syscall"
 )
 
+import "github.com/JamesDunne/go-util/base"
 import "github.com/JamesDunne/go-util/fs/notify"
 import "github.com/JamesDunne/i-host/base62"
 
@@ -355,6 +354,23 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	return o
 }
 
+func projectModelList(list []Image) (modelList []ImageViewModel) {
+	modelList = make([]ImageViewModel, 0, len(list))
+
+	count := 0
+	for _, img := range list {
+		if img.IsHidden {
+			continue
+		}
+
+		modelList = append(modelList, ImageViewModel{})
+		xlatImageViewModel(&img, &modelList[count])
+		count++
+	}
+
+	return
+}
+
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
@@ -376,6 +392,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		rsp.WriteHeader(http.StatusNoContent)
 		return
 	} else if req.URL.Path == "/" || req.URL.Path == "/a/all" {
+		var err error
+
 		// Render a list page:
 		api, err := NewAPI()
 		if webErrorIf(rsp, err, 500) {
@@ -383,7 +401,15 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 		defer api.Close()
 
-		list, err := api.GetList()
+		var list []Image
+		if _, ok := req.URL.Query()["newest"]; ok {
+			list, err = api.GetList(ImagesOrderByIDDESC)
+		} else if _, ok := req.URL.Query()["oldest"]; ok {
+			list, err = api.GetList(ImagesOrderByIDASC)
+		} else {
+			list, err = api.GetList(ImagesOrderByTitleASC)
+		}
+
 		if webErrorIf(rsp, err, 500) {
 			return
 		}
@@ -392,16 +418,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		model := struct {
 			List []ImageViewModel
 		}{
-			List: make([]ImageViewModel, 0, len(list)),
-		}
-		count := 0
-		for _, img := range list {
-			if img.IsHidden {
-				continue
-			}
-			model.List = append(model.List, ImageViewModel{})
-			xlatImageViewModel(&img, &model.List[count])
-			count++
+			List: projectModelList(list),
 		}
 
 		var viewName string
@@ -426,13 +443,23 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 		return
 	} else if req.URL.Path == "/api/list" {
+		var err error
+
 		api, err := NewAPI()
 		if webErrorIf(rsp, err, 500) {
 			return
 		}
 		defer api.Close()
 
-		list, err := api.GetList()
+		var list []Image
+		if _, ok := req.URL.Query()["newest"]; ok {
+			list, err = api.GetList(ImagesOrderByIDDESC)
+		} else if _, ok := req.URL.Query()["oldest"]; ok {
+			list, err = api.GetList(ImagesOrderByIDASC)
+		} else {
+			list, err = api.GetList(ImagesOrderByTitleASC)
+		}
+
 		if webErrorIf(rsp, err, 500) {
 			return
 		}
@@ -441,13 +468,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		model := struct {
 			List []ImageViewModel `json:"list"`
 		}{
-			List: make([]ImageViewModel, len(list)),
-		}
-		for i, img := range list {
-			if img.IsHidden {
-				continue
-			}
-			xlatImageViewModel(&img, &model.List[i])
+			List: projectModelList(list),
 		}
 
 		jsonText, err := json.Marshal(model)
@@ -623,11 +644,16 @@ func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, e
 
 func main() {
 	// Define our commandline flags:
-	socketType := flag.String("t", "tcp", "socket type to listen on: 'unix', 'tcp', 'udp'")
-	socketAddr := flag.String("l", ":8080", "address to listen on")
 	fs := flag.String("fs", ".", "Root directory of served files and templates")
 	xrGifArg := flag.String("xrg", "", "X-Accel-Redirect header prefix for serving images or blank to disable")
 	xrThumbArg := flag.String("xrt", "", "X-Accel-Redirect header prefix for serving thumbnails or blank to disable")
+
+	fl_listen_uri := flag.String("l", "tcp://0.0.0.0:8080", "listen URI (schemes available are tcp, unix)")
+	flag.Parse()
+
+	// Parse all the URIs:
+	listen_addr, err := base.ParseListenable(*fl_listen_uri)
+	base.PanicIf(err)
 
 	// Parse the flags and set values:
 	flag.Parse()
@@ -651,36 +677,8 @@ func main() {
 	}
 	defer cleanup()
 
-	// Create the socket to listen on:
-	l, err := net.Listen(*socketType, *socketAddr)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-
-	// NOTE(jsd): Unix sockets must be removed before being reused.
-
-	// Handle common process-killing signals so we can gracefully shut down:
-	// TODO(jsd): Go does not catch Windows' process kill signals (yet?)
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGQUIT)
-	go func(c chan os.Signal) {
-		// Wait for a signal:
-		sig := <-c
-		log.Printf("Caught signal '%s': shutting down.\n", sig)
-
-		// Stop listening:
-		l.Close()
-
-		// Delete the unix socket, if applicable:
-		if *socketType == "unix" {
-			os.Remove(*socketAddr)
-		}
-
-		// And we're done:
-		os.Exit(0)
-	}(sigc)
-
-	// Start the HTTP server:
-	log.Fatal(http.Serve(l, http.HandlerFunc(requestHandler)))
+	// Start the server:
+	base.ServeMain(listen_addr, func(l net.Listener) error {
+		return http.Serve(l, http.HandlerFunc(requestHandler))
+	})
 }

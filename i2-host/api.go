@@ -163,9 +163,27 @@ func (api *API) GetImage(id int64) (img *Image, err error) {
 	return
 }
 
-func (api *API) GetList() (imgs []Image, err error) {
+type ImagesOrderBy int
+
+const (
+	ImagesOrderByTitleASC  ImagesOrderBy = iota
+	ImagesOrderByTitleDESC ImagesOrderBy = iota
+	ImagesOrderByIDASC     ImagesOrderBy = iota
+	ImagesOrderByIDDESC    ImagesOrderBy = iota
+)
+
+func (api *API) GetList(orderBy ImagesOrderBy) (imgs []Image, err error) {
 	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by Title ASC`)
+	switch orderBy {
+	case ImagesOrderByTitleASC:
+		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by Title ASC`)
+	case ImagesOrderByTitleDESC:
+		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by Title DESC`)
+	case ImagesOrderByIDASC:
+		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by ID ASC`)
+	case ImagesOrderByIDDESC:
+		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by ID DESC`)
+	}
 	if err != nil {
 		return
 	}
