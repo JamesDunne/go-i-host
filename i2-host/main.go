@@ -392,13 +392,16 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		model := struct {
 			List []ImageViewModel
 		}{
-			List: make([]ImageViewModel, len(list)),
+			List: make([]ImageViewModel, 0, len(list)),
 		}
-		for i, img := range list {
+		count := 0
+		for _, img := range list {
 			if img.IsHidden {
 				continue
 			}
-			xlatImageViewModel(&img, &model.List[i])
+			model.List = append(model.List, ImageViewModel{})
+			xlatImageViewModel(&img, &model.List[count])
+			count++
 		}
 
 		var viewName string
