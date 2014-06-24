@@ -18,6 +18,25 @@ import (
 
 import "github.com/JamesDunne/go-util/imaging"
 
+func ensureThumbnail(image_path, thumb_path string) (err error) {
+	// Thumbnail exists; leave it alone:
+	if _, err = os.Stat(thumb_path); err == nil {
+		return nil
+	}
+
+	// Attempt to parse the image:
+	var firstImage image.Image
+	var imageKind string
+
+	firstImage, imageKind, err = decodeFirstImage(image_path)
+	defer func() { firstImage = nil }()
+	if err != nil {
+		return err
+	}
+
+	return generateThumbnail(firstImage, imageKind, thumb_path)
+}
+
 func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 	// Calculate the largest square bounds for a thumbnail to preserve aspect ratio
 	b := img.Bounds()

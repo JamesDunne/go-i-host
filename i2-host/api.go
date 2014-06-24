@@ -92,23 +92,27 @@ func (api *API) Close() {
 }
 
 type Image struct {
-	ID           int64
-	Kind         string
-	Title        string
-	SourceURL    *string
-	RedirectToID *int64
-	IsHidden     bool
-	IsClean      bool
+	ID             int64
+	Kind           string
+	Title          string
+	SourceURL      *string
+	CollectionName string `db:"CollectionName"`
+	Submitter      string `db:"Submitter"`
+	RedirectToID   *int64
+	IsHidden       bool
+	IsClean        bool
 }
 
 type dbImage struct {
-	ID           int64          `db:"ID"`
-	Kind         string         `db:"Kind"`
-	Title        string         `db:"Title"`
-	SourceURL    sql.NullString `db:"SourceURL"`
-	RedirectToID sql.NullInt64  `db:"RedirectToID"`
-	IsHidden     int64          `db:"IsHidden"`
-	IsClean      int64          `db:"IsClean"`
+	ID             int64          `db:"ID"`
+	Kind           string         `db:"Kind"`
+	Title          string         `db:"Title"`
+	SourceURL      sql.NullString `db:"SourceURL"`
+	CollectionName string         `db:"CollectionName"`
+	Submitter      string         `db:"Submitter"`
+	RedirectToID   sql.NullInt64  `db:"RedirectToID"`
+	IsHidden       int64          `db:"IsHidden"`
+	IsClean        int64          `db:"IsClean"`
 }
 
 func mapRecToEnt(r *dbImage) *Image {
@@ -125,7 +129,7 @@ func mapRecToEnt(r *dbImage) *Image {
 
 const nonIDColumns = "Kind, Title, SourceURL, RedirectToID, IsHidden, IsClean"
 
-func (api *API) NewImage(img Image) (int64, error) {
+func (api *API) NewImage(img *Image) (int64, error) {
 	var query string
 	var args []interface{}
 	if img.ID <= 0 {
