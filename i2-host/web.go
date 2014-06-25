@@ -14,6 +14,90 @@ import (
 	"strings"
 )
 
+type webError struct {
+	StatusCode int   `json:"statusCode"`
+	Error      error `json:"error"`
+}
+
+func asWebError(err error, statusCode int) *webError {
+	if err == nil {
+		return nil
+	}
+	return &webError{
+		StatusCode: statusCode,
+		Error:      err,
+	}
+}
+
+func (e *webError) RespondHTML(rsp http.ResponseWriter) bool {
+	if e == nil {
+		return false
+	}
+
+	rsp.WriteHeader(e.StatusCode)
+	rsp.Write([]byte(e.Error.Error()))
+	return true
+}
+
+func (e *webError) RespondJSON(rsp http.ResponseWriter) bool {
+	if e == nil {
+		return false
+	}
+
+	rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rsp.WriteHeader(e.StatusCode)
+	j, jerr := json.Marshal(e)
+	if jerr != nil {
+		panic(jerr)
+	}
+	rsp.Write(j)
+	return true
+}
+
+func jsonSuccess(rsp http.ResponseWriter, result interface{}) {
+	rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+	rsp.WriteHeader(http.StatusOK)
+	j, jerr := json.Marshal(&struct {
+		StatusCode int         `json:"statusCode"`
+		Result     interface{} `json:"result"`
+	}{
+		StatusCode: http.StatusOK,
+		Result:     result,
+	})
+	if jerr != nil {
+		panic(jerr)
+	}
+	rsp.Write(j)
+}
+
+func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
+	if err == nil {
+		return false
+	}
+
+	return asWebError(err, statusCode).RespondHTML(rsp)
+}
+
+func jsonErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
+	if err == nil {
+		return false
+	}
+
+	return asWebError(err, statusCode).RespondJSON(rsp)
+}
+
+func imageKindTo(imageKind string) (mimeType, ext, thumbExt string) {
+	switch imageKind {
+	case "jpeg":
+		return "image/jpeg", ".jpg", ".jpg"
+	case "png":
+		return "image/png", ".png", ".png"
+	case "gif":
+		return "image/gif", ".gif", ".png"
+	}
+	return "", "", ""
+}
+
 type ImageViewModel struct {
 	ID           int64   `json:"id"`
 	Base62ID     string  `json:"base62id"`
@@ -82,71 +166,6 @@ func isMultipart(r *http.Request) bool {
 		return false
 	}
 	return true
-}
-
-func imageKindTo(imageKind string) (mimeType, ext, thumbExt string) {
-	switch imageKind {
-	case "jpeg":
-		return "image/jpeg", ".jpg", ".jpg"
-	case "png":
-		return "image/png", ".png", ".png"
-	case "gif":
-		return "image/gif", ".gif", ".png"
-	}
-	return "", "", ""
-}
-
-type webError struct {
-	StatusCode int   `json:"statusCode"`
-	Error      error `json:"error"`
-}
-
-func asWebError(err error, statusCode int) *webError {
-	if err == nil {
-		return nil
-	}
-	return &webError{
-		StatusCode: statusCode,
-		Error:      err,
-	}
-}
-
-func (e *webError) RespondHTML(rsp http.ResponseWriter) bool {
-	if e == nil {
-		return false
-	}
-
-	rsp.WriteHeader(e.StatusCode)
-	rsp.Write([]byte(e.Error.Error()))
-	return true
-}
-
-func (e *webError) RespondJSON(rsp http.ResponseWriter) bool {
-	if e == nil {
-		return false
-	}
-
-	rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
-	rsp.WriteHeader(e.StatusCode)
-	j, _ := json.Marshal(e)
-	rsp.Write(j)
-	return true
-}
-
-func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
-	if err == nil {
-		return false
-	}
-
-	return asWebError(err, statusCode).RespondHTML(rsp)
-}
-
-func jsonErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
-	if err == nil {
-		return false
-	}
-
-	return asWebError(err, statusCode).RespondJSON(rsp)
 }
 
 type imageStoreRequest struct {
@@ -463,8 +482,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
-			json.Marshal(struct{}{})
+			jsonSuccess(rsp, &struct {
+				ID int64 `json:"id"`
+			}{
+				ID: id,
+			})
 			return
 		}
 
@@ -507,7 +529,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		var err error
 
 		api, err := NewAPI()
-		if webErrorIf(rsp, err, 500) {
+		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
 			return
 		}
 		defer api.Close()
@@ -521,7 +543,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
 		}
 
-		if webErrorIf(rsp, err, 500) {
+		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
 			return
 		}
 
@@ -532,14 +554,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			List: projectModelList(list),
 		}
 
-		jsonText, err := json.Marshal(model)
-		if jsonErrorIf(rsp, err, 500) {
-			return
-		}
-
-		rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rsp.WriteHeader(200)
-		rsp.Write(jsonText)
+		jsonSuccess(rsp, &model)
 		return
 	}
 

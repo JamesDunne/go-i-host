@@ -78,10 +78,12 @@ create table if not exists Image (
 		userVersion = "2"
 	}
 	if userVersion == "2" {
-		//api.ddl(
-		//	`pragma user_version = 3`,
-		//)
-		//userVersion = "3"
+		api.ddl(
+			`alter table Image add column CollectionName TEXT NOT NULL DEFAULT ''`,
+			`alter table Image add column Submitter TEXT NOT NULL DEFAULT ''`,
+			`pragma user_version = 3`,
+		)
+		userVersion = "3"
 	}
 
 	return
@@ -115,31 +117,35 @@ type dbImage struct {
 	IsClean        int64          `db:"IsClean"`
 }
 
-func mapRecToEnt(r *dbImage) *Image {
-	return &Image{
-		ID:           r.ID,
-		Kind:         r.Kind,
-		Title:        r.Title,
-		SourceURL:    nullStringToPtr(r.SourceURL),
-		RedirectToID: nullInt64ToPtr(r.RedirectToID),
-		IsHidden:     int64ToBool(r.IsHidden),
-		IsClean:      int64ToBool(r.IsClean),
+func mapRecToModel(r *dbImage, m *Image) *Image {
+	if m == nil {
+		m = &Image{}
 	}
+	m.ID = r.ID
+	m.Kind = r.Kind
+	m.Title = r.Title
+	m.SourceURL = nullStringToPtr(r.SourceURL)
+	m.CollectionName = r.CollectionName
+	m.Submitter = r.Submitter
+	m.RedirectToID = nullInt64ToPtr(r.RedirectToID)
+	m.IsHidden = int64ToBool(r.IsHidden)
+	m.IsClean = int64ToBool(r.IsClean)
+	return m
 }
 
-const nonIDColumns = "Kind, Title, SourceURL, RedirectToID, IsHidden, IsClean"
+const nonIDColumns = "Kind, Title, SourceURL, CollectionName, Submitter, RedirectToID, IsHidden, IsClean"
 
 func (api *API) NewImage(img *Image) (int64, error) {
 	var query string
 	var args []interface{}
 	if img.ID <= 0 {
 		// Insert a new record:
-		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6)`
-		args = []interface{}{img.Kind, img.Title, ptrToNullString(img.SourceURL), ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+		args = []interface{}{img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
 	} else {
 		// Do an identity insert:
-		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)`
-		args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+		args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
 	}
 
 	res, err := api.db.Exec(query, args...)
@@ -163,7 +169,7 @@ func (api *API) GetImage(id int64) (img *Image, err error) {
 		rec = nil
 		return nil, nil
 	}
-	img = mapRecToEnt(rec)
+	img = mapRecToModel(rec, nil)
 	return
 }
 
@@ -190,15 +196,14 @@ func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Im
 	}
 
 	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = @1 `+ob, collectionName)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 `+ob, collectionName)
 	if err != nil {
 		return
 	}
 
 	imgs = make([]Image, len(recs))
 	for i, r := range recs {
-		// FIXME(jsd): Use better non-copying behavior.
-		imgs[i] = *mapRecToEnt(&r)
+		mapRecToModel(&r, &imgs[i])
 	}
 	return
 }
