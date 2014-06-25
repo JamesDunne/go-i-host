@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 )
 
 type ImageViewModel struct {
@@ -170,6 +171,15 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 	}
 	defer api.Close()
 
+	newImage := &Image{
+		Kind:           req.kind,
+		Title:          req.title,
+		SourceURL:      &req.sourceURL,
+		CollectionName: req.collectionName,
+		Submitter:      req.submitter,
+		IsClean:        req.isClean,
+	}
+
 	if req.localPath != "" {
 		// Do some local image processing first:
 		var firstImage image.Image
@@ -183,7 +193,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 		_, ext, thumbExt := imageKindTo(req.kind)
 
 		// Create the DB record:
-		id, err = api.NewImage(&Image{Kind: req.kind, Title: req.title, SourceURL: &req.sourceURL, IsClean: req.isClean})
+		id, err = api.NewImage(newImage)
 		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
 			return
 		}
@@ -202,7 +212,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 		}
 	} else {
 		// Create the DB record:
-		id, err = api.NewImage(&Image{Kind: req.kind, Title: req.title, SourceURL: &req.sourceURL, IsClean: req.isClean})
+		id, err = api.NewImage(newImage)
 		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
 			return
 		}
@@ -211,9 +221,12 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 	return 0, nil
 }
 
-func postImage(rsp http.ResponseWriter, req *http.Request) {
+func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string) {
 	// Accept file upload from client or download from URL supplied.
-	store := imageStoreRequest{}
+	store := imageStoreRequest{
+		collectionName: collectionName,
+		submitter:      "",
+	}
 
 	if isMultipart(req) {
 		// Accept file upload:
@@ -363,20 +376,95 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
+func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName string, showUnclean bool) {
+	var err error
+
+	// Render a list page:
+	api, err := NewAPI()
+	if webErrorIf(rsp, err, 500) {
+		return
+	}
+	defer api.Close()
+
+	var list []Image
+	if _, ok := req.URL.Query()["newest"]; ok {
+		list, err = api.GetList(collectionName, ImagesOrderByIDDESC)
+	} else if _, ok := req.URL.Query()["oldest"]; ok {
+		list, err = api.GetList(collectionName, ImagesOrderByIDASC)
+	} else {
+		list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
+	}
+
+	if webErrorIf(rsp, err, 500) {
+		return
+	}
+
+	// Project into a view model:
+	model := struct {
+		List []ImageViewModel
+	}{
+		List: projectModelList(list),
+	}
+
+	var viewName string
+	if showUnclean {
+		viewName = "unclean"
+	} else {
+		viewName = "clean"
+	}
+
+	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+	rsp.WriteHeader(200)
+	if err := uiTmpl.ExecuteTemplate(rsp, viewName, model); webErrorIf(rsp, err, 500) {
+		return
+	}
+	return
+}
+
+// matches path against "/a/b" routes or "/a/b/*" routes and returns "*" portion or "".
+func matchSimpleRoute(path, route string) (remainder string, ok bool) {
+	if path == route {
+		return "", true
+	}
+
+	if strings.HasPrefix(path, route+"/") {
+		return path[len(route)+1:], true
+	}
+
+	return "", false
+}
+
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
 	if req.Method == "POST" {
 		// POST:
 
-		if req.URL.Path == "/a/new" {
+		if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/add"); ok {
 			// POST a new image:
-			postImage(rsp, req)
+			postImage(rsp, req, collectionName)
 			return
 			// JSON API:
-		} else if req.URL.Path == "/api/add" {
+		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/add"); ok {
 			// POST a new image from JSON API:
+			store := &imageStoreRequest{
+				collectionName: collectionName,
+			}
 
+			jd := json.NewDecoder(req.Body)
+			err := jd.Decode(store)
+			if jsonErrorIf(rsp, err, http.StatusBadRequest) {
+				return
+			}
+
+			// Process the store request:
+			id, werr := storeImage(store)
+			if werr.RespondJSON(rsp) {
+				return
+			}
+
+			rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+			json.Marshal(struct{}{})
 			return
 		}
 
@@ -385,62 +473,37 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	// GET:
+	_, showUnclean := req.URL.Query()["all"]
+
 	if req.URL.Path == "/favicon.ico" {
 		rsp.WriteHeader(http.StatusNoContent)
 		return
-	} else if req.URL.Path == "/" || req.URL.Path == "/a/all" {
-		var err error
-
-		// Render a list page:
-		api, err := NewAPI()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-		defer api.Close()
-
-		var list []Image
-		if _, ok := req.URL.Query()["newest"]; ok {
-			list, err = api.GetList(ImagesOrderByIDDESC)
-		} else if _, ok := req.URL.Query()["oldest"]; ok {
-			list, err = api.GetList(ImagesOrderByIDASC)
-		} else {
-			list, err = api.GetList(ImagesOrderByTitleASC)
-		}
-
-		if webErrorIf(rsp, err, 500) {
-			return
+	} else if req.URL.Path == "/" {
+		listCollection(rsp, req, "", showUnclean)
+		return
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/list"); ok {
+		listCollection(rsp, req, collectionName, showUnclean)
+		return
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/add"); ok {
+		model := &struct {
+			AddURL    string
+			UploadURL string
+		}{}
+		model.AddURL = "/col/add"
+		model.UploadURL = "/col/upload"
+		if collectionName != "" {
+			model.AddURL = "/col/add/" + collectionName
+			model.UploadURL = "/col/upload/" + collectionName
 		}
 
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel
-		}{
-			List: projectModelList(list),
-		}
-
-		var viewName string
-		if req.URL.Path == "/a/all" {
-			viewName = "all"
-		} else {
-			viewName = "frontPage"
-		}
-
+		// GET the /col/add form to add a new image:
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, viewName, model); webErrorIf(rsp, err, 500) {
+		if err := uiTmpl.ExecuteTemplate(rsp, "new", model); webErrorIf(rsp, err, 500) {
 			return
 		}
 		return
-	} else if req.URL.Path == "/a/new" {
-		// GET the /a/new form to add a new image:
-		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, "new", nil); webErrorIf(rsp, err, 500) {
-			return
-		}
-		return
-		// JSON API:
-	} else if req.URL.Path == "/api/list" {
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/list"); ok {
 		var err error
 
 		api, err := NewAPI()
@@ -451,11 +514,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		var list []Image
 		if _, ok := req.URL.Query()["newest"]; ok {
-			list, err = api.GetList(ImagesOrderByIDDESC)
+			list, err = api.GetList(collectionName, ImagesOrderByIDDESC)
 		} else if _, ok := req.URL.Query()["oldest"]; ok {
-			list, err = api.GetList(ImagesOrderByIDASC)
+			list, err = api.GetList(collectionName, ImagesOrderByIDASC)
 		} else {
-			list, err = api.GetList(ImagesOrderByTitleASC)
+			list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
 		}
 
 		if webErrorIf(rsp, err, 500) {

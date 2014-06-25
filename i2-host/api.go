@@ -96,8 +96,8 @@ type Image struct {
 	Kind           string
 	Title          string
 	SourceURL      *string
-	CollectionName string `db:"CollectionName"`
-	Submitter      string `db:"Submitter"`
+	CollectionName string
+	Submitter      string
 	RedirectToID   *int64
 	IsHidden       bool
 	IsClean        bool
@@ -176,18 +176,21 @@ const (
 	ImagesOrderByIDDESC    ImagesOrderBy = iota
 )
 
-func (api *API) GetList(orderBy ImagesOrderBy) (imgs []Image, err error) {
-	recs := make([]dbImage, 0, 200)
+func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := "order by Title ASC"
 	switch orderBy {
 	case ImagesOrderByTitleASC:
-		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by Title ASC`)
+		ob = "order by Title ASC"
 	case ImagesOrderByTitleDESC:
-		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by Title DESC`)
+		ob = "order by Title DESC"
 	case ImagesOrderByIDASC:
-		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by ID ASC`)
+		ob = "order by ID ASC"
 	case ImagesOrderByIDDESC:
-		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image order by ID DESC`)
+		ob = "order by ID DESC"
 	}
+
+	recs := make([]dbImage, 0, 200)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = @1 `+ob, collectionName)
 	if err != nil {
 		return
 	}
