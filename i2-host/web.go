@@ -123,15 +123,14 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	o.RedirectToID = i.RedirectToID
 	o.IsClean = i.IsClean
 	_, ext, thumbExt := imageKindTo(i.Kind)
+	if i.Kind == "" {
+		i.Kind = "gif"
+	}
 	switch i.Kind {
 	case "youtube":
 		o.ImageURL = "//www.youtube.com/embed/" + *i.SourceURL
 		o.ThumbURL = "//i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
-	case "gif":
-		fallthrough
-	case "jpeg":
-		fallthrough
-	case "png":
+	default:
 		o.ImageURL = "/" + o.Base62ID + ext
 		o.ThumbURL = "/t/" + o.Base62ID + thumbExt
 	}
@@ -203,13 +202,16 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 		// Do some local image processing first:
 		var firstImage image.Image
 
-		firstImage, req.kind, err = decodeFirstImage(req.localPath)
+		firstImage, newImage.Kind, err = decodeFirstImage(req.localPath)
 		defer func() { firstImage = nil }()
 		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
 			return
 		}
 
-		_, ext, thumbExt := imageKindTo(req.kind)
+		if newImage.Kind == "" {
+			newImage.Kind = "gif"
+		}
+		_, ext, thumbExt := imageKindTo(newImage.Kind)
 
 		// Create the DB record:
 		id, err = api.NewImage(newImage)
@@ -226,10 +228,14 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 
 		// Generate a thumbnail:
 		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
-		if werr = asWebError(generateThumbnail(firstImage, req.kind, thumb_path), http.StatusInternalServerError); werr != nil {
+		if werr = asWebError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
 			return
 		}
 	} else {
+		if newImage.Kind == "" {
+			newImage.Kind = "gif"
+		}
+
 		// Create the DB record:
 		id, err = api.NewImage(newImage)
 		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
@@ -237,7 +243,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 		}
 	}
 
-	return 0, nil
+	return id, nil
 }
 
 func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string) {
@@ -590,6 +596,9 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	}
 
 	// Determine mime-type and file extension:
+	if img.Kind == "" {
+		img.Kind = "gif"
+	}
 	mime, ext, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
