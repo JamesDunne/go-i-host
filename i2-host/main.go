@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 )
@@ -23,11 +24,23 @@ var (
 
 const thumbnail_dimensions = 200
 
-func html_path() string    { return base_folder + "/html" }
-func db_path() string      { return base_folder + "/sqlite.db" }
-func store_folder() string { return base_folder + "/store" }
-func thumb_folder() string { return base_folder + "/thumb" }
-func tmp_folder() string   { return base_folder + "/tmp" }
+func html_path() string { return base_folder + "/html" }
+func db_path() string   { return base_folder + "/sqlite.db" }
+func store_folder() string {
+	folder := base_folder + "/store"
+	os.MkdirAll(folder, 0755)
+	return folder
+}
+func thumb_folder() string {
+	folder := base_folder + "/thumb"
+	os.MkdirAll(folder, 0755)
+	return folder
+}
+func tmp_folder() string {
+	folder := base_folder + "/tmp"
+	os.MkdirAll(folder, 0755)
+	return folder
+}
 
 var uiTmpl *template.Template
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)

@@ -127,11 +127,12 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	o.IsClean = i.IsClean
 	o.CollectionName = i.CollectionName
 	o.Submitter = i.Submitter
-	_, ext, thumbExt := imageKindTo(i.Kind)
-	if i.Kind == "" {
-		i.Kind = "gif"
+
+	if o.Kind == "" {
+		o.Kind = "gif"
 	}
-	switch i.Kind {
+	_, ext, thumbExt := imageKindTo(o.Kind)
+	switch o.Kind {
 	case "youtube":
 		o.ImageURL = "//www.youtube.com/embed/" + *i.SourceURL
 		o.ThumbURL = "//i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
@@ -454,7 +455,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			postImage(rsp, req, collectionName)
 			return
 			// JSON API:
-		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/add"); ok {
+		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/v2/add"); ok {
 			// POST a new image from JSON API:
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
@@ -522,7 +523,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 		return
-	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/list"); ok {
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/v2/list"); ok {
 		var err error
 
 		api, err := NewAPI()
@@ -552,6 +553,45 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		jsonSuccess(rsp, &model)
+		return
+	} else if req.URL.Path == "/api/list" {
+		// NOTE(jsd): DEPRECATED API!
+		var err error
+
+		api, err := NewAPI()
+		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
+			return
+		}
+		defer api.Close()
+
+		var list []Image
+		if _, ok := req.URL.Query()["newest"]; ok {
+			list, err = api.GetList("", ImagesOrderByIDDESC)
+		} else if _, ok := req.URL.Query()["oldest"]; ok {
+			list, err = api.GetList("", ImagesOrderByIDASC)
+		} else {
+			list, err = api.GetList("", ImagesOrderByTitleASC)
+		}
+
+		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
+			return
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel `json:"list"`
+		}{
+			List: projectModelList(list),
+		}
+
+		jsonText, err := json.Marshal(model)
+		if jsonErrorIf(rsp, err, 500) {
+			return
+		}
+
+		rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
+		rsp.WriteHeader(200)
+		rsp.Write(jsonText)
 		return
 	}
 
