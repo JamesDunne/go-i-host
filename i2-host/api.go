@@ -196,7 +196,7 @@ func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Im
 	}
 
 	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 `+ob, collectionName)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 or CollectionName = '' `+ob, collectionName)
 	if err != nil {
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/ioutil"
 	"mime"
 	"net/http"
 	"net/url"
@@ -99,15 +100,17 @@ func imageKindTo(imageKind string) (mimeType, ext, thumbExt string) {
 }
 
 type ImageViewModel struct {
-	ID           int64   `json:"id"`
-	Base62ID     string  `json:"base62id"`
-	Title        string  `json:"title"`
-	Kind         string  `json:"kind"`
-	ImageURL     string  `json:"imageURL"`
-	ThumbURL     string  `json:"thumbURL"`
-	SourceURL    *string `json:"sourceURL,omitempty"`
-	RedirectToID *int64  `json:"redirectToID,omitempty"`
-	IsClean      bool    `json:"isClean"`
+	ID             int64   `json:"id"`
+	Base62ID       string  `json:"base62id"`
+	Title          string  `json:"title"`
+	Kind           string  `json:"kind"`
+	ImageURL       string  `json:"imageURL"`
+	ThumbURL       string  `json:"thumbURL"`
+	Submitter      string  `json:"submitter,omitempty"`
+	CollectionName string  `json:"collectionName,omitempty"`
+	SourceURL      *string `json:"sourceURL,omitempty"`
+	RedirectToID   *int64  `json:"redirectToID,omitempty"`
+	IsClean        bool    `json:"isClean"`
 }
 
 func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
@@ -122,6 +125,8 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	o.SourceURL = i.SourceURL
 	o.RedirectToID = i.RedirectToID
 	o.IsClean = i.IsClean
+	o.CollectionName = i.CollectionName
+	o.Submitter = i.Submitter
 	_, ext, thumbExt := imageKindTo(i.Kind)
 	if i.Kind == "" {
 		i.Kind = "gif"
@@ -168,17 +173,17 @@ func isMultipart(r *http.Request) bool {
 }
 
 type imageStoreRequest struct {
-	kind           string
-	localPath      string
-	title          string
-	sourceURL      string
-	collectionName string
-	submitter      string
-	isClean        bool
+	Kind           string `json:"kind"`
+	LocalPath      string
+	Title          string `json:"title"`
+	SourceURL      string `json:"sourceURL"`
+	CollectionName string
+	Submitter      string `json:"submitter"`
+	IsClean        bool   `json:"isClean"`
 }
 
 func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
-	if req.title == "" {
+	if req.Title == "" {
 		return 0, asWebError(fmt.Errorf("Missing title!"), http.StatusBadRequest)
 	}
 
@@ -190,19 +195,19 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 	defer api.Close()
 
 	newImage := &Image{
-		Kind:           req.kind,
-		Title:          req.title,
-		SourceURL:      &req.sourceURL,
-		CollectionName: req.collectionName,
-		Submitter:      req.submitter,
-		IsClean:        req.isClean,
+		Kind:           req.Kind,
+		Title:          req.Title,
+		SourceURL:      &req.SourceURL,
+		CollectionName: req.CollectionName,
+		Submitter:      req.Submitter,
+		IsClean:        req.IsClean,
 	}
 
-	if req.localPath != "" {
+	if req.LocalPath != "" {
 		// Do some local image processing first:
 		var firstImage image.Image
 
-		firstImage, newImage.Kind, err = decodeFirstImage(req.localPath)
+		firstImage, newImage.Kind, err = decodeFirstImage(req.LocalPath)
 		defer func() { firstImage = nil }()
 		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
 			return
@@ -222,7 +227,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 		// Rename the file:
 		img_name := fmt.Sprintf("%d", id)
 		store_path := path.Join(store_folder(), img_name+ext)
-		if werr = asWebError(os.Rename(req.localPath, store_path), http.StatusInternalServerError); werr != nil {
+		if werr = asWebError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
 			return
 		}
 
@@ -246,11 +251,57 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 	return id, nil
 }
 
+func downloadImageFor(store *imageStoreRequest) *webError {
+	// Validate the URL:
+	imgurl, err := url.Parse(store.SourceURL)
+	if err != nil {
+		return asWebError(err, 400)
+	}
+
+	// Check if it's a youtube link:
+	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "www.youtube.com") {
+		// Process youtube links specially:
+		if imgurl.Path != "/watch" {
+			return asWebError(fmt.Errorf("Unrecognized YouTube URL form."), 400)
+		}
+
+		store.Kind = "youtube"
+		store.LocalPath = ""
+		store.SourceURL = imgurl.Query().Get("v")
+		return nil
+	}
+
+	// Do a HTTP GET to fetch the image:
+	img_rsp, err := http.Get(store.SourceURL)
+	if err != nil {
+		return asWebError(err, 500)
+	}
+	defer img_rsp.Body.Close()
+
+	// Create a local temporary file to download to:
+	local_file, err := ioutil.TempFile(tmp_folder(), "dl-")
+	if err != nil {
+		return asWebError(err, 500)
+	}
+	defer local_file.Close()
+
+	store.LocalPath = local_file.Name()
+	//log.Printf("to %s", store.localPath)
+
+	// Download file:
+	_, err = io.Copy(local_file, img_rsp.Body)
+	if err != nil {
+		return asWebError(err, 500)
+	}
+
+	return nil
+}
+
 func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string) {
 	// Accept file upload from client or download from URL supplied.
-	store := imageStoreRequest{
-		collectionName: collectionName,
-		submitter:      "",
+	store := &imageStoreRequest{
+		CollectionName: collectionName,
+		Submitter:      req.RemoteAddr,
 	}
 
 	if isMultipart(req) {
@@ -274,7 +325,7 @@ func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string
 				if webErrorIf(rsp, err, 500) {
 					return
 				}
-				store.title = string(t[:n])
+				store.Title = string(t[:n])
 				continue
 			}
 			if part.FileName() == "" {
@@ -282,22 +333,22 @@ func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string
 			}
 
 			// Copy upload data to a local file:
-			store.sourceURL = "file://" + part.FileName()
-			store.localPath = path.Join(tmp_folder(), part.FileName())
-			//log.Printf("Accepting upload: '%s'\n", store.localPath)
+			store.SourceURL = "file://" + part.FileName()
 
-			if err, statusCode := func() (error, int) {
-				f, err := os.Create(store.localPath)
+			if func() *webError {
+				f, err := ioutil.TempFile(tmp_folder(), "up-")
 				if err != nil {
-					return err, 500
+					return asWebError(err, 500)
 				}
 				defer f.Close()
 
+				store.LocalPath = f.Name()
+
 				if _, err := io.Copy(f, part); err != nil {
-					return err, 500
+					return asWebError(err, 500)
 				}
-				return nil, 200
-			}(); webErrorIf(rsp, err, statusCode) {
+				return nil
+			}().RespondHTML(rsp) {
 				return
 			}
 		}
@@ -305,89 +356,22 @@ func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string
 		// Handle download from URL:
 
 		// Require the 'title' form value:
-		store.title = req.FormValue("title")
-		if store.title == "" {
+		store.Title = req.FormValue("title")
+		if store.Title == "" {
 			rsp.WriteHeader(http.StatusBadRequest)
 			rsp.Write([]byte("Missing title!"))
 			return
 		}
 
-		// Parse the URL so we get the file name:
-		store.sourceURL = imgurl_s
-		imgurl, err := url.Parse(imgurl_s)
-		if webErrorIf(rsp, err, 400) {
+		store.SourceURL = imgurl_s
+
+		// Download the image from the URL:
+		if downloadImageFor(store).RespondHTML(rsp) {
 			return
 		}
-
-		// Split the absolute path by dir and filename:
-		_, filename := path.Split(imgurl.Path)
-		//log.Printf("Downloading %s", filename)
-
-		// GET the url:
-		if err, statusCode := func() (error, int) {
-			img_rsp, err := http.Get(imgurl_s)
-			if err != nil {
-				return err, 500
-			}
-			defer img_rsp.Body.Close()
-
-			// Create a local file:
-			store.localPath = path.Join(tmp_folder(), filename)
-			//log.Printf("to %s", store.localPath)
-
-			local_file, err := os.Create(store.localPath)
-			if err != nil {
-				return err, 500
-			}
-			defer local_file.Close()
-
-			// Download file:
-			_, err = io.Copy(local_file, img_rsp.Body)
-			if err != nil {
-				return err, 500
-			}
-
-			return nil, 200
-		}(); webErrorIf(rsp, err, statusCode) {
-			return
-		}
-	} else if yturl_s := req.FormValue("youtube_url"); yturl_s != "" {
-		// YouTube URL:
-		store.kind = "youtube"
-
-		// Require the 'title' form value:
-		store.title = req.FormValue("title")
-		if store.title == "" {
-			rsp.WriteHeader(http.StatusBadRequest)
-			rsp.Write([]byte("Missing title!"))
-			return
-		}
-
-		// Parse the URL:
-		yturl, err := url.Parse(yturl_s)
-		if webErrorIf(rsp, err, 400) {
-			return
-		}
-
-		// Validate our expectations:
-		if yturl.Scheme != "http" && yturl.Scheme != "https" {
-			webErrorIf(rsp, fmt.Errorf("YouTube URL must have http or https scheme!"), 400)
-		}
-
-		if yturl.Host != "www.youtube.com" {
-			webErrorIf(rsp, fmt.Errorf("YouTube URL must be from www.youtube.com host!"), 400)
-			return
-		}
-
-		if yturl.Path != "/watch" {
-			webErrorIf(rsp, fmt.Errorf("Unrecognized YouTube URL form."), 400)
-			return
-		}
-
-		store.sourceURL = yturl.Query().Get("v")
 	}
 
-	id, err := storeImage(&store)
+	id, err := storeImage(store)
 	if err.RespondHTML(rsp) {
 		return
 	}
@@ -473,12 +457,17 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/add"); ok {
 			// POST a new image from JSON API:
 			store := &imageStoreRequest{
-				collectionName: collectionName,
+				CollectionName: collectionName,
 			}
 
 			jd := json.NewDecoder(req.Body)
 			err := jd.Decode(store)
 			if jsonErrorIf(rsp, err, http.StatusBadRequest) {
+				return
+			}
+
+			// Download Image locally:
+			if downloadImageFor(store).RespondJSON(rsp) {
 				return
 			}
 
@@ -489,9 +478,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			}
 
 			jsonSuccess(rsp, &struct {
-				ID int64 `json:"id"`
+				ID       int64  `json:"id"`
+				Base62ID string `json:"base62ID"`
 			}{
-				ID: id,
+				ID:       id,
+				Base62ID: b62.Encode(id + 10000),
 			})
 			return
 		}
