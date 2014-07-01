@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"path/filepath"
 )
 
 import "github.com/JamesDunne/go-util/base"
@@ -81,6 +82,18 @@ func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, e
 	return
 }
 
+func canonicalPath(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		panic(err)
+	}
+	abs, err = filepath.EvalSymlinks(abs)
+	if err != nil {
+		panic(err)
+	}
+	return abs
+}
+
 func main() {
 	// Define our commandline flags:
 	fs := flag.String("fs", ".", "Root directory of served files and templates")
@@ -96,7 +109,7 @@ func main() {
 
 	// Parse the flags and set values:
 	flag.Parse()
-	base_folder = path.Clean(*fs)
+	base_folder = canonicalPath(path.Clean(*fs))
 	xrGif = *xrGifArg
 	xrThumb = *xrThumbArg
 
