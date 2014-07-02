@@ -232,6 +232,11 @@ func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs 
 	return
 }
 
+func (api *API) Delete(id int64) (err error) {
+	_, err = api.db.Exec(`delete from Image where ID = ?1`, id)
+	return
+}
+
 // ------
 
 func nullInt64ToPtr(n sql.NullInt64) *int64 {

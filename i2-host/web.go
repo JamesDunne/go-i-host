@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -298,7 +299,6 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	defer local_file.Close()
 
 	store.LocalPath = local_file.Name()
-	//log.Printf("to %s", store.localPath)
 
 	// Download file:
 	_, err = io.Copy(local_file, img_rsp.Body)
@@ -385,7 +385,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			req.RemoteAddr = ip
 		}
 	}
-	//log.Printf("%s %s %s\nHeaders: %v\n\n", req.RemoteAddr, req.Method, req.URL, req.Header)
+	//log.Printf("%s %s %s %s\nHeaders: %v\n\n", req.RemoteAddr, req.Method, req.Host, req.URL, req.Header)
 
 	if req.Method == "POST" {
 		// POST:
@@ -529,7 +529,23 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Base62ID: b62.Encode(id + 10000),
 			})
 			return
-		} else if _, ok := matchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
+		} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
+			id, err := strconv.ParseInt(id_s, 10, 10)
+			if asWebError(err, http.StatusBadRequest).RespondHTML(rsp) {
+				return
+			}
+
+			if useAPI(func(api *API) *webError {
+				return asWebError(api.Delete(id), http.StatusInternalServerError)
+			}).RespondHTML(rsp) {
+				return
+			}
+
+			jsonSuccess(rsp, &struct {
+				Success bool `json:"success"`
+			}{
+				Success: true,
+			})
 			return
 		}
 
@@ -732,7 +748,6 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			// Pass request to nginx to serve static content file:
 			redirPath := path.Join(xrThumb, img_name+thumbExt)
 
-			//log.Printf("X-Accel-Redirect: %s", redirPath)
 			rsp.Header().Set("X-Accel-Redirect", redirPath)
 			rsp.Header().Set("Content-Type", mime)
 			rsp.WriteHeader(200)
@@ -751,7 +766,6 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// Pass request to nginx to serve static content file:
 		redirPath := path.Join(xrGif, img_name+ext)
 
-		//log.Printf("X-Accel-Redirect: %s", redirPath)
 		rsp.Header().Set("X-Accel-Redirect", redirPath)
 		rsp.Header().Set("Content-Type", mime)
 		rsp.WriteHeader(200)
