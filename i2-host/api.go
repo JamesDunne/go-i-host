@@ -210,8 +210,8 @@ func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Im
 	}
 
 	imgs = make([]Image, len(recs))
-	for i, r := range recs {
-		mapRecToModel(&r, &imgs[i])
+	for i, _ := range recs {
+		mapRecToModel(&recs[i], &imgs[i])
 	}
 	return
 }
@@ -226,8 +226,8 @@ func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs 
 	}
 
 	imgs = make([]Image, len(recs))
-	for i, r := range recs {
-		mapRecToModel(&r, &imgs[i])
+	for i, _ := range recs {
+		mapRecToModel(&recs[i], &imgs[i])
 	}
 	return
 }

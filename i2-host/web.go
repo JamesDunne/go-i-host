@@ -141,13 +141,14 @@ func projectModelList(list []Image) (modelList []ImageViewModel) {
 	modelList = make([]ImageViewModel, 0, len(list))
 
 	count := 0
-	for _, img := range list {
+	for i, _ := range list {
+		img := &list[i]
 		if img.IsHidden {
 			continue
 		}
 
 		modelList = append(modelList, ImageViewModel{})
-		xlatImageViewModel(&img, &modelList[count])
+		xlatImageViewModel(img, &modelList[count])
 		count++
 	}
 
