@@ -6,6 +6,7 @@ import (
 	"image"
 	"io"
 	"io/ioutil"
+	//"log"
 	"mime"
 	"net/http"
 	"net/url"
@@ -165,6 +166,16 @@ func isMultipart(r *http.Request) bool {
 	return true
 }
 
+func useAPI(use func(api *API) *webError) *webError {
+	api, err := NewAPI()
+	if err != nil {
+		return asWebError(err, http.StatusInternalServerError)
+	}
+	defer api.Close()
+
+	return use(api)
+}
+
 type imageStoreRequest struct {
 	Kind           string `json:"kind"`
 	LocalPath      string
@@ -181,64 +192,67 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 	}
 
 	// Open the database:
-	api, err := NewAPI()
-	if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
-		return
-	}
-	defer api.Close()
+	werr = useAPI(func(api *API) (werr *webError) {
+		var err error
 
-	newImage := &Image{
-		Kind:           req.Kind,
-		Title:          req.Title,
-		SourceURL:      &req.SourceURL,
-		CollectionName: req.CollectionName,
-		Submitter:      req.Submitter,
-		IsClean:        req.IsClean,
-	}
-
-	if req.LocalPath != "" {
-		// Do some local image processing first:
-		var firstImage image.Image
-
-		firstImage, newImage.Kind, err = decodeFirstImage(req.LocalPath)
-		defer func() { firstImage = nil }()
-		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
-			return
+		newImage := &Image{
+			Kind:           req.Kind,
+			Title:          req.Title,
+			SourceURL:      &req.SourceURL,
+			CollectionName: req.CollectionName,
+			Submitter:      req.Submitter,
+			IsClean:        req.IsClean,
 		}
 
-		if newImage.Kind == "" {
-			newImage.Kind = "gif"
-		}
-		_, ext, thumbExt := imageKindTo(newImage.Kind)
+		if req.LocalPath != "" {
+			// Do some local image processing first:
+			var firstImage image.Image
 
-		// Create the DB record:
-		id, err = api.NewImage(newImage)
-		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
-			return
+			firstImage, newImage.Kind, err = decodeFirstImage(req.LocalPath)
+			defer func() { firstImage = nil }()
+			if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
+				return
+			}
+
+			if newImage.Kind == "" {
+				newImage.Kind = "gif"
+			}
+			_, ext, thumbExt := imageKindTo(newImage.Kind)
+
+			// Create the DB record:
+			id, err = api.NewImage(newImage)
+			if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
+				return
+			}
+
+			// Rename the file:
+			img_name := fmt.Sprintf("%d", id)
+			store_path := path.Join(store_folder(), img_name+ext)
+			if werr = asWebError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
+				return
+			}
+
+			// Generate a thumbnail:
+			thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
+			if werr = asWebError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
+				return
+			}
+		} else {
+			if newImage.Kind == "" {
+				newImage.Kind = "gif"
+			}
+
+			// Create the DB record:
+			id, err = api.NewImage(newImage)
+			if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
+				return
+			}
 		}
 
-		// Rename the file:
-		img_name := fmt.Sprintf("%d", id)
-		store_path := path.Join(store_folder(), img_name+ext)
-		if werr = asWebError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
-			return
-		}
-
-		// Generate a thumbnail:
-		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
-		if werr = asWebError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
-			return
-		}
-	} else {
-		if newImage.Kind == "" {
-			newImage.Kind = "gif"
-		}
-
-		// Create the DB record:
-		id, err = api.NewImage(newImage)
-		if werr = asWebError(err, http.StatusInternalServerError); werr != nil {
-			return
-		}
+		return nil
+	})
+	if werr != nil {
+		return 0, werr
 	}
 
 	return id, nil
@@ -294,29 +308,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
-func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName string, showUnclean bool) {
-	var err error
-
-	// Render a list page:
-	api, err := NewAPI()
-	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
-		return
-	}
-	defer api.Close()
-
-	var list []Image
-	if _, ok := req.URL.Query()["newest"]; ok {
-		list, err = api.GetList(collectionName, ImagesOrderByIDDESC)
-	} else if _, ok := req.URL.Query()["oldest"]; ok {
-		list, err = api.GetList(collectionName, ImagesOrderByIDASC)
-	} else {
-		list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
-	}
-
-	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
-		return
-	}
-
+func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName string, list []Image, showUnclean bool) {
 	// Project into a view model:
 	model := struct {
 		List []ImageViewModel
@@ -352,9 +344,32 @@ func matchSimpleRoute(path, route string) (remainder string, ok bool) {
 	return "", false
 }
 
+func getList(collectionName string, orderBy ImagesOrderBy) (list []Image, werr *webError) {
+	werr = useAPI(func(api *API) *webError {
+		var err error
+
+		list, err = api.GetList(collectionName, orderBy)
+
+		return asWebError(err, http.StatusInternalServerError)
+	})
+
+	return
+}
+
+func getListOnly(collectionName string, orderBy ImagesOrderBy) (list []Image, werr *webError) {
+	werr = useAPI(func(api *API) *webError {
+		var err error
+
+		list, err = api.GetListOnly(collectionName, orderBy)
+
+		return asWebError(err, http.StatusInternalServerError)
+	})
+
+	return
+}
+
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
-	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
 	// Set RemoteAddr for forwarded requests:
 	{
 		ip := req.Header.Get("X-Real-IP")
@@ -365,6 +380,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			req.RemoteAddr = ip
 		}
 	}
+	//log.Printf("%s %s %s\nHeaders: %v\n\n", req.RemoteAddr, req.Method, req.URL, req.Header)
 
 	if req.Method == "POST" {
 		// POST:
@@ -518,14 +534,42 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	// GET:
 	_, showUnclean := req.URL.Query()["all"]
 
+	var orderBy ImagesOrderBy
+	if _, ok := req.URL.Query()["newest"]; ok {
+		orderBy = ImagesOrderByIDDESC
+	} else if _, ok := req.URL.Query()["oldest"]; ok {
+		orderBy = ImagesOrderByIDASC
+	} else {
+		orderBy = ImagesOrderByTitleASC
+	}
+
 	if req.URL.Path == "/favicon.ico" {
 		rsp.WriteHeader(http.StatusNoContent)
 		return
 	} else if req.URL.Path == "/" {
-		listCollection(rsp, req, "", showUnclean)
+		// Render a list page:
+		list, werr := getList("", orderBy)
+		if werr.RespondHTML(rsp) {
+			return
+		}
+
+		listCollection(rsp, req, "", list, showUnclean)
 		return
 	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/list"); ok {
-		listCollection(rsp, req, collectionName, showUnclean)
+		list, werr := getList(collectionName, orderBy)
+		if werr.RespondHTML(rsp) {
+			return
+		}
+
+		listCollection(rsp, req, collectionName, list, showUnclean)
+		return
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/only"); ok {
+		list, werr := getListOnly(collectionName, orderBy)
+		if werr.RespondHTML(rsp) {
+			return
+		}
+
+		listCollection(rsp, req, collectionName, list, showUnclean)
 		return
 	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/add"); ok {
 		model := &struct {
@@ -547,24 +591,23 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 		return
 	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/v2/list"); ok {
-		var err error
-
-		api, err := NewAPI()
-		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
+		list, werr := getList(collectionName, orderBy)
+		if werr.RespondJSON(rsp) {
 			return
 		}
-		defer api.Close()
 
-		var list []Image
-		if _, ok := req.URL.Query()["newest"]; ok {
-			list, err = api.GetList(collectionName, ImagesOrderByIDDESC)
-		} else if _, ok := req.URL.Query()["oldest"]; ok {
-			list, err = api.GetList(collectionName, ImagesOrderByIDASC)
-		} else {
-			list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel `json:"list"`
+		}{
+			List: projectModelList(list),
 		}
 
-		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
+		jsonSuccess(rsp, &model)
+		return
+	} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/v2/only"); ok {
+		list, werr := getListOnly(collectionName, orderBy)
+		if werr.RespondJSON(rsp) {
 			return
 		}
 
@@ -581,22 +624,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// NOTE(jsd): DEPRECATED API!
 		var err error
 
-		api, err := NewAPI()
-		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
-			return
-		}
-		defer api.Close()
-
-		var list []Image
-		if _, ok := req.URL.Query()["newest"]; ok {
-			list, err = api.GetList("", ImagesOrderByIDDESC)
-		} else if _, ok := req.URL.Query()["oldest"]; ok {
-			list, err = api.GetList("", ImagesOrderByIDASC)
-		} else {
-			list, err = api.GetList("", ImagesOrderByTitleASC)
-		}
-
-		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
+		list, werr := getListOnly("", orderBy)
+		if werr.RespondJSON(rsp) {
 			return
 		}
 
@@ -626,27 +655,29 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 	id := b62.Decode(filename) - 10000
 
-	api, err := NewAPI()
-	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
-		return
-	}
-	defer api.Close()
-	img, err := api.GetImage(id)
-	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
-		return
-	}
-	if img == nil {
-		rsp.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	// Follow redirect chain:
-	for img.RedirectToID != nil {
-		newimg, err := api.GetImage(*img.RedirectToID)
-		if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
-			return
+	var img *Image
+	var err error
+	if useAPI(func(api *API) *webError {
+		img, err = api.GetImage(id)
+		if err != nil {
+			return asWebError(err, http.StatusInternalServerError)
 		}
-		img = newimg
+		if img == nil {
+			return asWebError(fmt.Errorf("No record for ID exists"), http.StatusNotFound)
+		}
+
+		// Follow redirect chain:
+		for img.RedirectToID != nil {
+			newimg, err := api.GetImage(*img.RedirectToID)
+			if err != nil {
+				return asWebError(err, http.StatusInternalServerError)
+			}
+			img = newimg
+		}
+
+		return nil
+	}).RespondHTML(rsp) {
+		return
 	}
 
 	// Determine mime-type and file extension:

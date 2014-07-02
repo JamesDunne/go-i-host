@@ -182,9 +182,11 @@ const (
 	ImagesOrderByIDDESC    ImagesOrderBy = iota
 )
 
-func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
-	ob := "order by Title ASC"
+func (orderBy ImagesOrderBy) ToSQL() string {
+	var ob string
 	switch orderBy {
+	default:
+		fallthrough
 	case ImagesOrderByTitleASC:
 		ob = "order by Title ASC"
 	case ImagesOrderByTitleDESC:
@@ -195,8 +197,30 @@ func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Im
 		ob = "order by ID DESC"
 	}
 
+	return ob
+}
+
+func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := orderBy.ToSQL()
+
 	recs := make([]dbImage, 0, 200)
 	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 or CollectionName = '' `+ob, collectionName)
+	if err != nil {
+		return
+	}
+
+	imgs = make([]Image, len(recs))
+	for i, r := range recs {
+		mapRecToModel(&r, &imgs[i])
+	}
+	return
+}
+
+func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := orderBy.ToSQL()
+
+	recs := make([]dbImage, 0, 200)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 `+ob, collectionName)
 	if err != nil {
 		return
 	}
