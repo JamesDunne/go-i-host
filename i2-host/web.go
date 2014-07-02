@@ -853,7 +853,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	// Find the image file:
 	img_name := strconv.FormatInt(img.ID, 10)
 
-	if dir == "/b" || dir == "/w" {
+	if dir == "/b" || dir == "/w" || dir == "/g" {
 		// Render a black or white BG centered image viewer:
 		var bgcolor string
 		switch dir {
@@ -861,6 +861,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			bgcolor = "black"
 		case "/w":
 			bgcolor = "white"
+		case "/g":
+			bgcolor = "gray"
 		}
 
 		model := struct {
