@@ -177,13 +177,14 @@ func useAPI(use func(api *API) *webError) *webError {
 }
 
 type imageStoreRequest struct {
-	Kind           string `json:"kind"`
-	LocalPath      string
-	Title          string `json:"title"`
-	SourceURL      string `json:"sourceURL"`
+	Kind      string `json:"kind"`
+	Title     string `json:"title"`
+	SourceURL string `json:"sourceURL"`
+	Submitter string `json:"submitter"`
+	IsClean   bool   `json:"isClean"`
+
 	CollectionName string
-	Submitter      string `json:"submitter"`
-	IsClean        bool   `json:"isClean"`
+	LocalPath      string
 }
 
 func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
@@ -227,12 +228,14 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 
 			// Rename the file:
 			img_name := fmt.Sprintf("%d", id)
+			os.MkdirAll(store_folder(), 0755)
 			store_path := path.Join(store_folder(), img_name+ext)
 			if werr = asWebError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
 				return
 			}
 
 			// Generate a thumbnail:
+			os.MkdirAll(thumb_folder(), 0755)
 			thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
 			if werr = asWebError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
 				return
@@ -286,6 +289,7 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	defer img_rsp.Body.Close()
 
 	// Create a local temporary file to download to:
+	os.MkdirAll(tmp_folder(), 0755)
 	local_file, err := ioutil.TempFile(tmp_folder(), "dl-")
 	if err != nil {
 		return asWebError(err, http.StatusInternalServerError)
@@ -465,6 +469,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				store.SourceURL = "file://" + part.FileName()
 
 				if func() *webError {
+					os.MkdirAll(tmp_folder(), 0755)
 					f, err := ioutil.TempFile(tmp_folder(), "up-")
 					if err != nil {
 						return asWebError(err, http.StatusInternalServerError)

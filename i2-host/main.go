@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 )
@@ -15,7 +14,6 @@ import "github.com/JamesDunne/go-util/base"
 import "github.com/JamesDunne/go-util/fs/notify"
 import "github.com/JamesDunne/i-host/base62"
 
-// FIXME(jsd): Hard-coded system paths here!
 var (
 	base_folder = "/srv/bittwiddlers.org/i2"
 	xrGif       = "/p-g/"
@@ -24,23 +22,11 @@ var (
 
 const thumbnail_dimensions = 200
 
-func html_path() string { return base_folder + "/html" }
-func db_path() string   { return base_folder + "/sqlite.db" }
-func store_folder() string {
-	folder := base_folder + "/store"
-	os.MkdirAll(folder, 0755)
-	return folder
-}
-func thumb_folder() string {
-	folder := base_folder + "/thumb"
-	os.MkdirAll(folder, 0755)
-	return folder
-}
-func tmp_folder() string {
-	folder := base_folder + "/tmp"
-	os.MkdirAll(folder, 0755)
-	return folder
-}
+func html_path() string    { return base_folder + "/html" }
+func db_path() string      { return base_folder + "/sqlite.db" }
+func store_folder() string { return base_folder + "/store" }
+func thumb_folder() string { return base_folder + "/thumb" }
+func tmp_folder() string   { return base_folder + "/tmp" }
 
 var uiTmpl *template.Template
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
