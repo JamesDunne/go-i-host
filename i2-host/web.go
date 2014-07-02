@@ -71,14 +71,6 @@ func jsonSuccess(rsp http.ResponseWriter, result interface{}) {
 	rsp.Write(j)
 }
 
-func webErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
-	if err == nil {
-		return false
-	}
-
-	return asWebError(err, statusCode).RespondHTML(rsp)
-}
-
 func jsonErrorIf(rsp http.ResponseWriter, err error, statusCode int) bool {
 	if err == nil {
 		return false
@@ -256,14 +248,14 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	// Validate the URL:
 	imgurl, err := url.Parse(store.SourceURL)
 	if err != nil {
-		return asWebError(err, 400)
+		return asWebError(err, http.StatusBadRequest)
 	}
 
 	// Check if it's a youtube link:
 	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "www.youtube.com") {
 		// Process youtube links specially:
 		if imgurl.Path != "/watch" {
-			return asWebError(fmt.Errorf("Unrecognized YouTube URL form."), 400)
+			return asWebError(fmt.Errorf("Unrecognized YouTube URL form."), http.StatusBadRequest)
 		}
 
 		store.Kind = "youtube"
@@ -275,14 +267,14 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	// Do a HTTP GET to fetch the image:
 	img_rsp, err := http.Get(store.SourceURL)
 	if err != nil {
-		return asWebError(err, 500)
+		return asWebError(err, http.StatusInternalServerError)
 	}
 	defer img_rsp.Body.Close()
 
 	// Create a local temporary file to download to:
 	local_file, err := ioutil.TempFile(tmp_folder(), "dl-")
 	if err != nil {
-		return asWebError(err, 500)
+		return asWebError(err, http.StatusInternalServerError)
 	}
 	defer local_file.Close()
 
@@ -292,7 +284,7 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	// Download file:
 	_, err = io.Copy(local_file, img_rsp.Body)
 	if err != nil {
-		return asWebError(err, 500)
+		return asWebError(err, http.StatusInternalServerError)
 	}
 
 	return nil
@@ -307,7 +299,7 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 
 	// Render a list page:
 	api, err := NewAPI()
-	if webErrorIf(rsp, err, 500) {
+	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 		return
 	}
 	defer api.Close()
@@ -321,7 +313,7 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 		list, err = api.GetList(collectionName, ImagesOrderByTitleASC)
 	}
 
-	if webErrorIf(rsp, err, 500) {
+	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 		return
 	}
 
@@ -341,7 +333,7 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	rsp.WriteHeader(200)
-	if err := uiTmpl.ExecuteTemplate(rsp, viewName, model); webErrorIf(rsp, err, 500) {
+	if asWebError(uiTmpl.ExecuteTemplate(rsp, viewName, model), http.StatusInternalServerError).RespondHTML(rsp) {
 		return
 	}
 	return
@@ -428,7 +420,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 			// Accept file upload:
 			reader, err := req.MultipartReader()
-			if webErrorIf(rsp, err, http.StatusBadRequest) {
+			if asWebError(err, http.StatusBadRequest).RespondHTML(rsp) {
 				return
 			}
 
@@ -443,7 +435,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 					//part.Header.Get("Content-Length")
 					t := make([]byte, 200)
 					n, err := part.Read(t)
-					if webErrorIf(rsp, err, 500) {
+					if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 						return
 					}
 					store.Title = string(t[:n])
@@ -459,14 +451,14 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				if func() *webError {
 					f, err := ioutil.TempFile(tmp_folder(), "up-")
 					if err != nil {
-						return asWebError(err, 500)
+						return asWebError(err, http.StatusInternalServerError)
 					}
 					defer f.Close()
 
 					store.LocalPath = f.Name()
 
 					if _, err := io.Copy(f, part); err != nil {
-						return asWebError(err, 500)
+						return asWebError(err, http.StatusInternalServerError)
 					}
 					return nil
 				}().RespondHTML(rsp) {
@@ -515,6 +507,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Base62ID: b62.Encode(id + 10000),
 			})
 			return
+		} else if _, ok := matchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
+			return
 		}
 
 		rsp.WriteHeader(http.StatusBadRequest)
@@ -548,7 +542,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// GET the /col/add form to add a new image:
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rsp.WriteHeader(200)
-		if err := uiTmpl.ExecuteTemplate(rsp, "new", model); webErrorIf(rsp, err, 500) {
+		if asWebError(uiTmpl.ExecuteTemplate(rsp, "new", model), http.StatusInternalServerError).RespondHTML(rsp) {
 			return
 		}
 		return
@@ -614,7 +608,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		jsonText, err := json.Marshal(model)
-		if jsonErrorIf(rsp, err, 500) {
+		if jsonErrorIf(rsp, err, http.StatusInternalServerError) {
 			return
 		}
 
@@ -633,12 +627,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	id := b62.Decode(filename) - 10000
 
 	api, err := NewAPI()
-	if webErrorIf(rsp, err, 500) {
+	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 		return
 	}
 	defer api.Close()
 	img, err := api.GetImage(id)
-	if webErrorIf(rsp, err, 500) {
+	if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 		return
 	}
 	if img == nil {
@@ -649,7 +643,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	// Follow redirect chain:
 	for img.RedirectToID != nil {
 		newimg, err := api.GetImage(*img.RedirectToID)
-		if webErrorIf(rsp, err, 500) {
+		if asWebError(err, http.StatusInternalServerError).RespondHTML(rsp) {
 			return
 		}
 		img = newimg
@@ -683,7 +677,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := uiTmpl.ExecuteTemplate(rsp, "view", model); webErrorIf(rsp, err, 500) {
+		if asWebError(uiTmpl.ExecuteTemplate(rsp, "view", model), http.StatusInternalServerError).RespondHTML(rsp) {
 			return
 		}
 
@@ -692,7 +686,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// Serve thumbnail file:
 		local_path := path.Join(store_folder(), img_name+ext)
 		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
-		if err := ensureThumbnail(local_path, thumb_path); webErrorIf(rsp, err, 500) {
+		if asWebError(ensureThumbnail(local_path, thumb_path), http.StatusInternalServerError).RespondHTML(rsp) {
 			runtime.GC()
 			return
 		}
