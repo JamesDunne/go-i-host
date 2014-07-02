@@ -17,8 +17,8 @@ import (
 )
 
 type webError struct {
-	StatusCode int   `json:"statusCode"`
-	Error      error `json:"error"`
+	StatusCode int
+	Error      error
 }
 
 func asWebError(err error, statusCode int) *webError {
@@ -48,7 +48,13 @@ func (e *webError) RespondJSON(rsp http.ResponseWriter) bool {
 
 	rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
 	rsp.WriteHeader(e.StatusCode)
-	j, jerr := json.Marshal(e)
+	j, jerr := json.Marshal(&struct {
+		StatusCode int    `json:"statusCode"`
+		Error      string `json:"error"`
+	}{
+		StatusCode: e.StatusCode,
+		Error:      e.Error.Error(),
+	})
 	if jerr != nil {
 		panic(jerr)
 	}
