@@ -298,90 +298,6 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 	return nil
 }
 
-func postImage(rsp http.ResponseWriter, req *http.Request, collectionName string) {
-	// Accept file upload from client or download from URL supplied.
-	store := &imageStoreRequest{
-		CollectionName: collectionName,
-		Submitter:      req.RemoteAddr,
-	}
-
-	if isMultipart(req) {
-		// Accept file upload:
-		reader, err := req.MultipartReader()
-		if webErrorIf(rsp, err, 500) {
-			return
-		}
-
-		// Keep reading the multipart form data and handle file uploads:
-		for {
-			part, err := reader.NextPart()
-			if err == io.EOF {
-				break
-			}
-			if part.FormName() == "title" {
-				// TODO: parse content-length if it exists?
-				//part.Header.Get("Content-Length")
-				t := make([]byte, 200)
-				n, err := part.Read(t)
-				if webErrorIf(rsp, err, 500) {
-					return
-				}
-				store.Title = string(t[:n])
-				continue
-			}
-			if part.FileName() == "" {
-				continue
-			}
-
-			// Copy upload data to a local file:
-			store.SourceURL = "file://" + part.FileName()
-
-			if func() *webError {
-				f, err := ioutil.TempFile(tmp_folder(), "up-")
-				if err != nil {
-					return asWebError(err, 500)
-				}
-				defer f.Close()
-
-				store.LocalPath = f.Name()
-
-				if _, err := io.Copy(f, part); err != nil {
-					return asWebError(err, 500)
-				}
-				return nil
-			}().RespondHTML(rsp) {
-				return
-			}
-		}
-	} else if imgurl_s := req.FormValue("url"); imgurl_s != "" {
-		// Handle download from URL:
-
-		// Require the 'title' form value:
-		store.Title = req.FormValue("title")
-		if store.Title == "" {
-			rsp.WriteHeader(http.StatusBadRequest)
-			rsp.Write([]byte("Missing title!"))
-			return
-		}
-
-		store.SourceURL = imgurl_s
-
-		// Download the image from the URL:
-		if downloadImageFor(store).RespondHTML(rsp) {
-			return
-		}
-	}
-
-	id, err := storeImage(store)
-	if err.RespondHTML(rsp) {
-		return
-	}
-
-	// Redirect to the black-background viewer:
-	redir_url := path.Join("/b/", b62.Encode(id+10000))
-	http.Redirect(rsp, req, redir_url, 302)
-}
-
 func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
@@ -447,16 +363,129 @@ func matchSimpleRoute(path, route string) (remainder string, ok bool) {
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	//log.Printf("HTTP: %s %s", req.Method, req.URL.Path)
+	// Set RemoteAddr for forwarded requests:
+	{
+		ip := req.Header.Get("X-Real-IP")
+		if ip == "" {
+			ip = req.Header.Get("X-Forwarded-For")
+		}
+		if ip != "" {
+			req.RemoteAddr = ip
+		}
+	}
+
 	if req.Method == "POST" {
 		// POST:
 
 		if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/add"); ok {
-			// POST a new image:
-			postImage(rsp, req, collectionName)
+			// Add a new image via URL to download from:
+			imgurl_s := req.FormValue("url")
+			if imgurl_s == "" {
+				asWebError(fmt.Errorf("Missing required 'url' form value!"), http.StatusBadRequest).RespondHTML(rsp)
+				return
+			}
+
+			store := &imageStoreRequest{
+				CollectionName: collectionName,
+				Submitter:      req.RemoteAddr,
+				Title:          req.FormValue("title"),
+				SourceURL:      imgurl_s,
+			}
+
+			// Require the 'title' form value:
+			if store.Title == "" {
+				rsp.WriteHeader(http.StatusBadRequest)
+				rsp.Write([]byte("Missing title!"))
+				return
+			}
+
+			// Download the image from the URL:
+			if downloadImageFor(store).RespondHTML(rsp) {
+				return
+			}
+
+			// Store it in the database and generate thumbnail:
+			id, err := storeImage(store)
+			if err.RespondHTML(rsp) {
+				return
+			}
+
+			// Redirect to a black-background view of the image:
+			redir_url := path.Join("/b/", b62.Encode(id+10000))
+			http.Redirect(rsp, req, redir_url, 302)
 			return
-			// JSON API:
+		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/col/upload"); ok {
+			// Upload a new image:
+			store := &imageStoreRequest{
+				CollectionName: collectionName,
+				Submitter:      req.RemoteAddr,
+			}
+
+			if !isMultipart(req) {
+				asWebError(fmt.Errorf("Upload request must be multipart form data"), http.StatusBadRequest).RespondHTML(rsp)
+				return
+			}
+
+			// Accept file upload:
+			reader, err := req.MultipartReader()
+			if webErrorIf(rsp, err, http.StatusBadRequest) {
+				return
+			}
+
+			// Keep reading the multipart form data and handle file uploads:
+			for {
+				part, err := reader.NextPart()
+				if err == io.EOF {
+					break
+				}
+				if part.FormName() == "title" {
+					// TODO: parse content-length if it exists?
+					//part.Header.Get("Content-Length")
+					t := make([]byte, 200)
+					n, err := part.Read(t)
+					if webErrorIf(rsp, err, 500) {
+						return
+					}
+					store.Title = string(t[:n])
+					continue
+				}
+				if part.FileName() == "" {
+					continue
+				}
+
+				// Copy upload data to a local file:
+				store.SourceURL = "file://" + part.FileName()
+
+				if func() *webError {
+					f, err := ioutil.TempFile(tmp_folder(), "up-")
+					if err != nil {
+						return asWebError(err, 500)
+					}
+					defer f.Close()
+
+					store.LocalPath = f.Name()
+
+					if _, err := io.Copy(f, part); err != nil {
+						return asWebError(err, 500)
+					}
+					return nil
+				}().RespondHTML(rsp) {
+					return
+				}
+			}
+
+			// Store it in the database and generate thumbnail:
+			id, werr := storeImage(store)
+			if werr.RespondHTML(rsp) {
+				return
+			}
+
+			// Redirect to a black-background view of the image:
+			redir_url := path.Join("/b/", b62.Encode(id+10000))
+			http.Redirect(rsp, req, redir_url, 302)
+			return
 		} else if collectionName, ok := matchSimpleRoute(req.URL.Path, "/api/v2/add"); ok {
-			// POST a new image from JSON API:
+			// Add a new image via URL to download from via JSON API:
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
 			}
