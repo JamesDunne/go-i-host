@@ -530,10 +530,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			})
 			return
 		} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
-			id, err := strconv.ParseInt(id_s, 10, 10)
-			if asWebError(err, http.StatusBadRequest).RespondJSON(rsp) {
-				return
-			}
+			id := b62.Decode(id_s) - 10000
 
 			if useAPI(func(api *API) *webError {
 				return asWebError(api.Delete(id), http.StatusInternalServerError)
@@ -643,10 +640,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		jsonSuccess(rsp, &model)
 		return
 	} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/info"); ok {
-		id, err := strconv.ParseInt(id_s, 10, 10)
-		if asWebError(err, http.StatusBadRequest).RespondJSON(rsp) {
-			return
-		}
+		id := b62.Decode(id_s) - 10000
 
 		var img *Image
 		if useAPI(func(api *API) *webError {
@@ -679,10 +673,13 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		if img.Kind != "youtube" {
 			var width, height int
+			var err error
+
 			width, height, model.Kind, err = getImageInfo(local_path)
 			if asWebError(err, http.StatusInternalServerError).RespondJSON(rsp) {
 				return
 			}
+
 			model.Width = &width
 			model.Height = &height
 		}
