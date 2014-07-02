@@ -531,13 +531,13 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
 			id, err := strconv.ParseInt(id_s, 10, 10)
-			if asWebError(err, http.StatusBadRequest).RespondHTML(rsp) {
+			if asWebError(err, http.StatusBadRequest).RespondJSON(rsp) {
 				return
 			}
 
 			if useAPI(func(api *API) *webError {
 				return asWebError(api.Delete(id), http.StatusInternalServerError)
-			}).RespondHTML(rsp) {
+			}).RespondJSON(rsp) {
 				return
 			}
 
@@ -642,6 +642,53 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		jsonSuccess(rsp, &model)
 		return
+	} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/info"); ok {
+		id, err := strconv.ParseInt(id_s, 10, 10)
+		if asWebError(err, http.StatusBadRequest).RespondJSON(rsp) {
+			return
+		}
+
+		var img *Image
+		if useAPI(func(api *API) *webError {
+			var err error
+			img, err = api.GetImage(id)
+			return asWebError(err, http.StatusInternalServerError)
+		}).RespondJSON(rsp) {
+			return
+		}
+		if img == nil {
+			asWebError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).RespondJSON(rsp)
+			return
+		}
+
+		// Decode the image and grab its properties:
+		_, ext, _ := imageKindTo(img.Kind)
+		local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
+
+		var model = &struct {
+			ID       int64  `json:"id"`
+			Base62ID string `json:"base62ID"`
+			Kind     string `json:"kind"`
+			Width    *int   `json:"width,omitempty"`
+			Height   *int   `json:"height,omitempty"`
+		}{
+			ID:       id,
+			Base62ID: b62.Encode(id + 10000),
+			Kind:     img.Kind,
+		}
+
+		if img.Kind != "youtube" {
+			var width, height int
+			width, height, model.Kind, err = getImageInfo(local_path)
+			if asWebError(err, http.StatusInternalServerError).RespondJSON(rsp) {
+				return
+			}
+			model.Width = &width
+			model.Height = &height
+		}
+
+		jsonSuccess(rsp, model)
+		return
 	} else if req.URL.Path == "/api/list" {
 		// NOTE(jsd): DEPRECATED API!
 		var err error
@@ -709,7 +756,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	mime, ext, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
-	img_name := fmt.Sprintf("%d", img.ID)
+	img_name := strconv.FormatInt(img.ID, 10)
 
 	if dir == "/b" || dir == "/w" {
 		// Render a black or white BG centered image viewer:

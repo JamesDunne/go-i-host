@@ -18,6 +18,21 @@ import (
 
 import "github.com/JamesDunne/go-util/imaging"
 
+func getImageInfo(image_path string) (w int, h int, kind string, err error) {
+	imf, err := os.Open(image_path)
+	if err != nil {
+		return 0, 0, "", err
+	}
+	defer imf.Close()
+
+	config, kind, err := image.DecodeConfig(imf)
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	return config.Width, config.Height, kind, nil
+}
+
 func ensureThumbnail(image_path, thumb_path string) (err error) {
 	// Thumbnail exists; leave it alone:
 	if _, err = os.Stat(thumb_path); err == nil {
