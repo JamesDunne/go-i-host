@@ -12,11 +12,133 @@ import (
 import (
 	"github.com/JamesDunne/go-util/imaging/gif" // my own patches to image/gif
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 )
 
 import "github.com/JamesDunne/go-util/imaging"
+
+func subImage(img image.Image, srcBounds image.Rectangle) image.Image {
+	switch si := img.(type) {
+	case *image.RGBA:
+		return si.SubImage(srcBounds)
+	case *image.YCbCr:
+		return si.SubImage(srcBounds)
+	case *image.Paletted:
+		return si.SubImage(srcBounds)
+	case *image.RGBA64:
+		return si.SubImage(srcBounds)
+	case *image.NRGBA:
+		return si.SubImage(srcBounds)
+	case *image.NRGBA64:
+		return si.SubImage(srcBounds)
+	case *image.Alpha:
+		return si.SubImage(srcBounds)
+	case *image.Alpha16:
+		return si.SubImage(srcBounds)
+	case *image.Gray:
+		return si.SubImage(srcBounds)
+	case *image.Gray16:
+		return si.SubImage(srcBounds)
+	default:
+		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
+	}
+}
+
+// Copies an image to a new image:
+func cloneImage(src image.Image) image.Image {
+	srcBounds := src.Bounds().Canon()
+	zeroedBounds := srcBounds.Sub(srcBounds.Min)
+
+	switch si := src.(type) {
+	case *image.RGBA:
+		out := image.NewRGBA(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetRGBA(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.RGBA))
+			}
+		}
+		return out
+	case *image.YCbCr:
+		out := image.NewYCbCr(zeroedBounds, si.SubsampleRatio)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				ycbcr := si.At(x, y).(color.YCbCr)
+				out.Y[(y-srcBounds.Min.Y)*si.YStride+(x-srcBounds.Min.X)] = ycbcr.Y
+				out.Cb[(y-srcBounds.Min.Y)*si.CStride+(x-srcBounds.Min.X)] = ycbcr.Cb
+				out.Cr[(y-srcBounds.Min.Y)*si.CStride+(x-srcBounds.Min.X)] = ycbcr.Cr
+			}
+		}
+		return out
+	case *image.Paletted:
+		out := image.NewPaletted(zeroedBounds, si.Palette)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetColorIndex(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.ColorIndexAt(x, y))
+			}
+		}
+		return out
+	case *image.RGBA64:
+		out := image.NewRGBA64(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetRGBA64(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.RGBA64))
+			}
+		}
+		return out
+	case *image.NRGBA:
+		out := image.NewNRGBA(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetNRGBA(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.NRGBA))
+			}
+		}
+		return out
+	case *image.NRGBA64:
+		out := image.NewNRGBA64(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetNRGBA64(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.NRGBA64))
+			}
+		}
+		return out
+	case *image.Alpha:
+		out := image.NewAlpha(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetAlpha(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Alpha))
+			}
+		}
+		return out
+	case *image.Alpha16:
+		out := image.NewAlpha16(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetAlpha16(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Alpha16))
+			}
+		}
+		return out
+	case *image.Gray:
+		out := image.NewGray(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetGray(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Gray))
+			}
+		}
+		return out
+	case *image.Gray16:
+		out := image.NewGray16(zeroedBounds)
+		for y := srcBounds.Min.Y; y <= srcBounds.Max.Y; y++ {
+			for x := srcBounds.Min.X; x <= srcBounds.Max.X; x++ {
+				out.SetGray16(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Gray16))
+			}
+		}
+		return out
+	default:
+		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(src).Name()))
+	}
+}
 
 // Gets an image's configuration:
 func getImageInfo(image_path string) (w int, h int, kind string, err error) {
@@ -73,7 +195,7 @@ func cropImage(image_path string, left, top, right, bottom int) (tmp_output stri
 				return "", fmt.Errorf("Crop boundaries are not contained within image boundaries")
 			}
 
-			g.Image[i] = img.SubImage(cropBounds).(*image.Paletted)
+			g.Image[i] = cloneImage(img.SubImage(cropBounds)).(*image.Paletted)
 		}
 
 		// Write the cropped images to a new GIF:
@@ -109,7 +231,7 @@ func cropImage(image_path string, left, top, right, bottom int) (tmp_output stri
 		}
 		defer tmpf.Close()
 
-		img = subImage(img, cropBounds)
+		img = cloneImage(subImage(img, cropBounds))
 		err = jpeg.Encode(tmpf, img, &jpeg.Options{Quality: 100})
 		if err != nil {
 			return "", err
@@ -161,33 +283,6 @@ func ensureThumbnail(image_path, thumb_path string) (err error) {
 	}
 
 	return generateThumbnail(firstImage, imageKind, thumb_path)
-}
-
-func subImage(img image.Image, srcBounds image.Rectangle) image.Image {
-	switch si := img.(type) {
-	case *image.RGBA:
-		return si.SubImage(srcBounds)
-	case *image.YCbCr:
-		return si.SubImage(srcBounds)
-	case *image.Paletted:
-		return si.SubImage(srcBounds)
-	case *image.RGBA64:
-		panic(fmt.Errorf("Unhandled image format type: %s", "RGBA64"))
-	case *image.NRGBA:
-		return si.SubImage(srcBounds)
-	case *image.NRGBA64:
-		panic(fmt.Errorf("Unhandled image format type: %s", "NRGBA64"))
-	case *image.Alpha:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha"))
-	case *image.Alpha16:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha16"))
-	case *image.Gray:
-		return si.SubImage(srcBounds)
-	case *image.Gray16:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Gray16"))
-	default:
-		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
-	}
 }
 
 func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
