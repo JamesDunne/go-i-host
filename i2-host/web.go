@@ -228,7 +228,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *webError) {
 			}
 
 			// Rename the file:
-			img_name := fmt.Sprintf("%d", id)
+			img_name := strconv.FormatInt(id, 10)
 			os.MkdirAll(store_folder(), 0755)
 			store_path := path.Join(store_folder(), img_name+ext)
 			if werr = asWebError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
@@ -573,6 +573,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			}
 
 			// Crop the image:
+			// _, ext, thumbExt := imageKindTo(img.Kind)
 			_, ext, _ := imageKindTo(img.Kind)
 			local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
 			tmp_output, err := cropImage(local_path, cr.Left, cr.Top, cr.Right, cr.Bottom)
@@ -580,10 +581,50 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				return
 			}
 
+			// Clone the image record to a new record:
+			if useAPI(func(api *API) *webError {
+				var err error
+				img.ID = 0
+				img.ID, err = api.NewImage(img)
+				return asWebError(err, http.StatusInternalServerError)
+			}).RespondJSON(rsp) {
+				return
+			}
+
+			// Move the temp file to the final storage path:
+			img_name := strconv.FormatInt(img.ID, 10)
+			os.MkdirAll(store_folder(), 0755)
+			store_path := path.Join(store_folder(), img_name+ext)
+			if asWebError(os.Rename(tmp_output, store_path), http.StatusInternalServerError).RespondJSON(rsp) {
+				return
+			}
+
+			//// Generate a thumbnail:
+			//os.MkdirAll(thumb_folder(), 0755)
+			//thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
+			//if asWebError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError).RespondJSON(rsp) {
+			//	return
+			//}
+			width, height := cr.Right-cr.Left, cr.Bottom-cr.Top
+
 			jsonSuccess(rsp, &struct {
-				Path string `json:"path"`
+				ID             int64  `json:"id"`
+				Base62ID       string `json:"base62ID"`
+				Title          string `json:"title"`
+				CollectionName string `json:"collectionName,omitempty"`
+				Submitter      string `json:"submitter,omitempty"`
+				Kind           string `json:"kind"`
+				Width          *int   `json:"width,omitempty"`
+				Height         *int   `json:"height,omitempty"`
 			}{
-				Path: tmp_output,
+				ID:             img.ID,
+				Base62ID:       b62.Encode(img.ID + 10000),
+				Kind:           img.Kind,
+				Title:          img.Title,
+				CollectionName: img.CollectionName,
+				Submitter:      img.Submitter,
+				Width:          &width,
+				Height:         &height,
 			})
 			return
 		}
