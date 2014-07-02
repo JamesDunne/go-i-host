@@ -660,18 +660,27 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
 
 		var model = &struct {
-			ID       int64  `json:"id"`
-			Base62ID string `json:"base62ID"`
-			Kind     string `json:"kind"`
-			Width    *int   `json:"width,omitempty"`
-			Height   *int   `json:"height,omitempty"`
+			ID             int64  `json:"id"`
+			Base62ID       string `json:"base62ID"`
+			Title          string `json:"title"`
+			CollectionName string `json:"collectionName,omitempty"`
+			Submitter      string `json:"submitter,omitempty"`
+			Kind           string `json:"kind"`
+			Width          *int   `json:"width,omitempty"`
+			Height         *int   `json:"height,omitempty"`
 		}{
-			ID:       id,
-			Base62ID: b62.Encode(id + 10000),
-			Kind:     img.Kind,
+			ID:             id,
+			Base62ID:       b62.Encode(id + 10000),
+			Kind:           img.Kind,
+			Title:          img.Title,
+			CollectionName: img.CollectionName,
+			Submitter:      img.Submitter,
+		}
+		if model.Kind == "" {
+			model.Kind = "gif"
 		}
 
-		if img.Kind != "youtube" {
+		if model.Kind != "youtube" {
 			var width, height int
 			var err error
 
