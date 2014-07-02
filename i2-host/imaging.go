@@ -18,6 +18,7 @@ import (
 
 import "github.com/JamesDunne/go-util/imaging"
 
+// Gets an image's configuration:
 func getImageInfo(image_path string) (w int, h int, kind string, err error) {
 	imf, err := os.Open(image_path)
 	if err != nil {
@@ -31,6 +32,116 @@ func getImageInfo(image_path string) (w int, h int, kind string, err error) {
 	}
 
 	return config.Width, config.Height, kind, nil
+}
+
+// Crops an image and outputs a new image file:
+func cropImage(image_path string, left, top, right, bottom int) (tmp_output string, err error) {
+	cropBounds := image.Rect(left, top, right, bottom)
+
+	// Open the image for reading:
+	imf, err := os.Open(image_path)
+	if err != nil {
+		return "", err
+	}
+	defer imf.Close()
+
+	// Figure out what kind of image it is:
+	_, imageKind, err := image.DecodeConfig(imf)
+	if err != nil {
+		return "", err
+	}
+	imf.Seek(0, 0)
+
+	// Crop images:
+	switch imageKind {
+	case "gif":
+		// Decode all GIF frames and crop them:
+
+		// FIXME(jsd): This approach clearly does not work. An integrated decoder-encoder needs to be written
+		// for animated GIFs so as to preserve as much of the encoding details as possible and crop the
+		// transparent animation subframes over the full image.
+
+		var g *gif.GIF
+		g, err = gif.DecodeAll(imf)
+		if err != nil {
+			return "", err
+		}
+
+		// Crop all the frames:
+		for i, img := range g.Image {
+			if !cropBounds.In(img.Bounds()) {
+				return "", fmt.Errorf("Crop boundaries are not contained within image boundaries")
+			}
+
+			g.Image[i] = img.SubImage(cropBounds).(*image.Paletted)
+		}
+
+		// Write the cropped images to a new GIF:
+		tmpf, err := TempFile(tmp_folder(), "crop-", ".gif")
+		if err != nil {
+			return "", err
+		}
+		defer tmpf.Close()
+
+		err = gif.EncodeAll(tmpf, g)
+		if err != nil {
+			return "", err
+		}
+
+		g.Image = nil
+		g.Delay = nil
+		g = nil
+
+		return tmpf.Name(), nil
+	case "jpeg":
+		img, err := jpeg.Decode(imf)
+		if err != nil {
+			return "", err
+		}
+
+		if !cropBounds.In(img.Bounds()) {
+			return "", fmt.Errorf("Crop boundaries are not contained within image boundaries")
+		}
+
+		tmpf, err := TempFile(tmp_folder(), "crop-", ".jpg")
+		if err != nil {
+			return "", err
+		}
+		defer tmpf.Close()
+
+		img = subImage(img, cropBounds)
+		err = jpeg.Encode(tmpf, img, &jpeg.Options{Quality: 100})
+		if err != nil {
+			return "", err
+		}
+
+		return tmpf.Name(), nil
+	case "png":
+		img, err := png.Decode(imf)
+		if err != nil {
+			return "", err
+		}
+
+		if !cropBounds.In(img.Bounds()) {
+			return "", fmt.Errorf("Crop boundaries are not contained within image boundaries")
+		}
+
+		tmpf, err := TempFile(tmp_folder(), "crop-", ".png")
+		if err != nil {
+			return "", err
+		}
+		defer tmpf.Close()
+
+		img = subImage(img, cropBounds)
+		err = png.Encode(tmpf, img)
+		if err != nil {
+			return "", err
+		}
+
+		return tmpf.Name(), nil
+	default:
+		return "", fmt.Errorf("Unrecognized image kind '%s'", imageKind)
+	}
 }
 
 func ensureThumbnail(image_path, thumb_path string) (err error) {
@@ -50,6 +161,33 @@ func ensureThumbnail(image_path, thumb_path string) (err error) {
 	}
 
 	return generateThumbnail(firstImage, imageKind, thumb_path)
+}
+
+func subImage(img image.Image, srcBounds image.Rectangle) image.Image {
+	switch si := img.(type) {
+	case *image.RGBA:
+		return si.SubImage(srcBounds)
+	case *image.YCbCr:
+		return si.SubImage(srcBounds)
+	case *image.Paletted:
+		return si.SubImage(srcBounds)
+	case *image.RGBA64:
+		panic(fmt.Errorf("Unhandled image format type: %s", "RGBA64"))
+	case *image.NRGBA:
+		return si.SubImage(srcBounds)
+	case *image.NRGBA64:
+		panic(fmt.Errorf("Unhandled image format type: %s", "NRGBA64"))
+	case *image.Alpha:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha"))
+	case *image.Alpha16:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha16"))
+	case *image.Gray:
+		return si.SubImage(srcBounds)
+	case *image.Gray16:
+		panic(fmt.Errorf("Unhandled image format type: %s", "Gray16"))
+	default:
+		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
+	}
 }
 
 func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
@@ -72,31 +210,7 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 	//log.Printf("'%s': resize %v to %v\n", filename, b, srcBounds)
 
 	// Cut out the center square to a new image:
-	var boximg image.Image
-	switch si := img.(type) {
-	case *image.RGBA:
-		boximg = si.SubImage(srcBounds)
-	case *image.YCbCr:
-		boximg = si.SubImage(srcBounds)
-	case *image.Paletted:
-		boximg = si.SubImage(srcBounds)
-	case *image.RGBA64:
-		panic(fmt.Errorf("Unhandled image format type: %s", "RGBA64"))
-	case *image.NRGBA:
-		boximg = si.SubImage(srcBounds)
-	case *image.NRGBA64:
-		panic(fmt.Errorf("Unhandled image format type: %s", "NRGBA64"))
-	case *image.Alpha:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha"))
-	case *image.Alpha16:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Alpha16"))
-	case *image.Gray:
-		boximg = si.SubImage(srcBounds)
-	case *image.Gray16:
-		panic(fmt.Errorf("Unhandled image format type: %s", "Gray16"))
-	default:
-		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
-	}
+	boximg := subImage(img, srcBounds)
 
 	img = nil
 

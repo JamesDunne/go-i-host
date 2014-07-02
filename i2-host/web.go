@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"io/ioutil"
 	//"log"
 	"mime"
 	"net/http"
@@ -292,7 +291,7 @@ func downloadImageFor(store *imageStoreRequest) *webError {
 
 	// Create a local temporary file to download to:
 	os.MkdirAll(tmp_folder(), 0755)
-	local_file, err := ioutil.TempFile(tmp_folder(), "dl-")
+	local_file, err := TempFile(tmp_folder(), "dl-", "")
 	if err != nil {
 		return asWebError(err, http.StatusInternalServerError)
 	}
@@ -471,7 +470,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 				if func() *webError {
 					os.MkdirAll(tmp_folder(), 0755)
-					f, err := ioutil.TempFile(tmp_folder(), "up-")
+					f, err := TempFile(tmp_folder(), "up-", path.Ext(part.FileName()))
 					if err != nil {
 						return asWebError(err, http.StatusInternalServerError)
 					}
@@ -542,6 +541,49 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Success bool `json:"success"`
 			}{
 				Success: true,
+			})
+			return
+		} else if id_s, ok := matchSimpleRoute(req.URL.Path, "/api/v2/crop"); ok {
+			id := b62.Decode(id_s) - 10000
+
+			cr := &struct {
+				Left   int `json:"left"`
+				Top    int `json:"top"`
+				Right  int `json:"right"`
+				Bottom int `json:"bottom"`
+			}{}
+
+			jd := json.NewDecoder(req.Body)
+			err := jd.Decode(cr)
+			if jsonErrorIf(rsp, err, http.StatusBadRequest) {
+				return
+			}
+
+			var img *Image
+			if useAPI(func(api *API) *webError {
+				var err error
+				img, err = api.GetImage(id)
+				return asWebError(err, http.StatusInternalServerError)
+			}).RespondJSON(rsp) {
+				return
+			}
+			if img == nil {
+				asWebError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).RespondJSON(rsp)
+				return
+			}
+
+			// Crop the image:
+			_, ext, _ := imageKindTo(img.Kind)
+			local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
+			tmp_output, err := cropImage(local_path, cr.Left, cr.Top, cr.Right, cr.Bottom)
+			if asWebError(err, http.StatusInternalServerError).RespondJSON(rsp) {
+				return
+			}
+
+			jsonSuccess(rsp, &struct {
+				Path string `json:"path"`
+			}{
+				Path: tmp_output,
 			})
 			return
 		}
@@ -659,7 +701,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		_, ext, _ := imageKindTo(img.Kind)
 		local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
 
-		var model = &struct {
+		model := &struct {
 			ID             int64  `json:"id"`
 			Base62ID       string `json:"base62ID"`
 			Title          string `json:"title"`
