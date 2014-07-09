@@ -6,141 +6,16 @@ import (
 	//"log"
 	"os"
 	//"path"
-	"reflect"
 )
 
 import (
+	"github.com/JamesDunne/go-util/imaging"
 	"github.com/JamesDunne/go-util/imaging/gif" // my own patches to image/gif
 	"image"
-	"image/color"
+	//"image/color"
 	"image/jpeg"
 	"image/png"
 )
-
-import "github.com/JamesDunne/go-util/imaging"
-
-func subImage(img image.Image, srcBounds image.Rectangle) image.Image {
-	switch si := img.(type) {
-	case *image.RGBA:
-		return si.SubImage(srcBounds)
-	case *image.YCbCr:
-		return si.SubImage(srcBounds)
-	case *image.Paletted:
-		return si.SubImage(srcBounds)
-	case *image.RGBA64:
-		return si.SubImage(srcBounds)
-	case *image.NRGBA:
-		return si.SubImage(srcBounds)
-	case *image.NRGBA64:
-		return si.SubImage(srcBounds)
-	case *image.Alpha:
-		return si.SubImage(srcBounds)
-	case *image.Alpha16:
-		return si.SubImage(srcBounds)
-	case *image.Gray:
-		return si.SubImage(srcBounds)
-	case *image.Gray16:
-		return si.SubImage(srcBounds)
-	default:
-		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(img).Name()))
-	}
-}
-
-// Copies an image to a new image:
-func cloneImage(src image.Image) image.Image {
-	srcBounds := src.Bounds().Canon()
-	zeroedBounds := srcBounds.Sub(srcBounds.Min)
-
-	switch si := src.(type) {
-	case *image.RGBA:
-		out := image.NewRGBA(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetRGBA(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.RGBA))
-			}
-		}
-		return out
-	case *image.YCbCr:
-		out := image.NewYCbCr(zeroedBounds, si.SubsampleRatio)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				ycbcr := si.At(x, y).(color.YCbCr)
-				yoffs := out.YOffset(x-srcBounds.Min.X, y-srcBounds.Min.Y)
-				coffs := out.COffset(x-srcBounds.Min.X, y-srcBounds.Min.Y)
-				out.Y[yoffs] = ycbcr.Y
-				out.Cb[coffs] = ycbcr.Cb
-				out.Cr[coffs] = ycbcr.Cr
-			}
-		}
-		return out
-	case *image.Paletted:
-		out := image.NewPaletted(zeroedBounds, si.Palette)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetColorIndex(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.ColorIndexAt(x, y))
-			}
-		}
-		return out
-	case *image.RGBA64:
-		out := image.NewRGBA64(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetRGBA64(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.RGBA64))
-			}
-		}
-		return out
-	case *image.NRGBA:
-		out := image.NewNRGBA(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetNRGBA(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.NRGBA))
-			}
-		}
-		return out
-	case *image.NRGBA64:
-		out := image.NewNRGBA64(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetNRGBA64(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.NRGBA64))
-			}
-		}
-		return out
-	case *image.Alpha:
-		out := image.NewAlpha(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetAlpha(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Alpha))
-			}
-		}
-		return out
-	case *image.Alpha16:
-		out := image.NewAlpha16(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetAlpha16(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Alpha16))
-			}
-		}
-		return out
-	case *image.Gray:
-		out := image.NewGray(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetGray(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Gray))
-			}
-		}
-		return out
-	case *image.Gray16:
-		out := image.NewGray16(zeroedBounds)
-		for y := srcBounds.Min.Y; y < srcBounds.Max.Y; y++ {
-			for x := srcBounds.Min.X; x < srcBounds.Max.X; x++ {
-				out.SetGray16(x-srcBounds.Min.X, y-srcBounds.Min.Y, si.At(x, y).(color.Gray16))
-			}
-		}
-		return out
-	default:
-		panic(fmt.Errorf("Unhandled image format type: %s", reflect.TypeOf(src).Name()))
-	}
-}
 
 // Gets an image's configuration:
 func getImageInfo(image_path string) (w int, h int, kind string, err error) {
@@ -197,7 +72,7 @@ func cropImage(image_path string, left, top, right, bottom int) (tmp_output stri
 				return "", fmt.Errorf("Crop boundaries are not contained within image boundaries")
 			}
 
-			g.Image[i] = cloneImage(img.SubImage(cropBounds)).(*image.Paletted)
+			g.Image[i] = imaging.CloneKind(imaging.SubImageKind(img, cropBounds)).(*image.Paletted)
 		}
 
 		// Write the cropped images to a new GIF:
@@ -233,7 +108,7 @@ func cropImage(image_path string, left, top, right, bottom int) (tmp_output stri
 		}
 		defer tmpf.Close()
 
-		img = cloneImage(subImage(img, cropBounds))
+		img = imaging.CloneKind(imaging.SubImageKind(img, cropBounds))
 		err = jpeg.Encode(tmpf, img, &jpeg.Options{Quality: 100})
 		if err != nil {
 			return "", err
@@ -256,7 +131,7 @@ func cropImage(image_path string, left, top, right, bottom int) (tmp_output stri
 		}
 		defer tmpf.Close()
 
-		img = subImage(img, cropBounds)
+		img = imaging.SubImageKind(img, cropBounds)
 		err = png.Encode(tmpf, img)
 		if err != nil {
 			return "", err
@@ -307,7 +182,7 @@ func makeThumbnail(img image.Image, dimensions int) (thumbImg image.Image) {
 	//log.Printf("'%s': resize %v to %v\n", filename, b, srcBounds)
 
 	// Cut out the center square to a new image:
-	boximg := subImage(img, srcBounds)
+	boximg := imaging.SubImageKind(img, srcBounds)
 
 	img = nil
 
