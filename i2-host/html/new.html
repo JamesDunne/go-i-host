@@ -3,34 +3,34 @@
 
 <html>
 <head>
-	<title>Submit an Image</title>
+    <title>Submit an Image</title>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
 </head>
 <body style="background: black; color: silver; text-align: center; vertical-align: middle">
-	<div>
-		<h2>Rehome an image from another URL</h2>
-		<form action="{{.AddURL}}" method="POST">
-			<label for="rehome_url"><input type="url" id="rehome_url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
+    <div>
+        <h2>Rehome an image from another URL</h2>
+        <form action="{{.AddURL}}" method="POST">
+            <label for="rehome_url"><input type="url" id="rehome_url" name="url" size="128" autofocus="autofocus" placeholder="URL" /></label><br />
             <label for="rehome_title"><input type="text" id="rehome_title" name="title" size="128" placeholder="Title" /></label><br/>
-			<input type="submit" value="Submit" />
-		</form>
-	</div>
+            <input type="submit" value="Submit" />
+        </form>
+    </div>
     <div>
-		<h2>Add a YouTube clip</h2>
-		<form action="{{.AddURL}}" method="POST">
-			<label for="youtube_url"><input type="url" id="youtube_url" name="url" size="128" placeholder="YouTube URL" /></label><br />
+        <h2>Add a YouTube clip</h2>
+        <form action="{{.AddURL}}" method="POST">
+            <label for="youtube_url"><input type="url" id="youtube_url" name="url" size="128" placeholder="YouTube URL" /></label><br />
             <label for="youtube_title"><input type="text" id="youtube_title" name="title" size="128" placeholder="Title" /></label><br/>
-			<input type="submit" value="Submit" />
-		</form>
-	</div>
+            <input type="submit" value="Submit" />
+        </form>
+    </div>
     <div>
-		<h2>Upload an image</h2>
-		<form action="{{.UploadURL}}" method="POST" enctype="multipart/form-data">
-			<label for="upload_file"><input type="file" id="upload_file" name="file" /></label><br />
+        <h2>Upload an image</h2>
+        <form action="{{.UploadURL}}" method="POST" enctype="multipart/form-data">
+            <label for="upload_file"><input type="file" id="upload_file" name="file" /></label><br />
             <label for="upload_title"><input type="text" id="upload_title" name="title" size="128" placeholder="Title" /></label><br/>
-			<input type="submit" value="Upload" />
-		</form>
-	</div>
+            <input type="submit" value="Upload" />
+        </form>
+    </div>
 </body>
 </html>
 {{end}}

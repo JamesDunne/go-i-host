@@ -2,14 +2,14 @@
 
 <html>
 <head>
-	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta property="og:url" content="http://i.bittwiddlers.org/">
     <meta property="og:type" content="website"/>
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="My Public Meme Collection"/>
     <meta property="og:description" content="A random collection of funny memes and animated GIFs I keep around for quick access."/>
     <meta property="og:image" content="http://i.bittwiddlers.org/t/KH3.png">
-	<title>Memes</title>
+    <title>Memes</title>
 
 <style type="text/css">
 html, body {
@@ -82,13 +82,13 @@ div.i div.title {
     <div id="main">
         {{range .List}}
         {{if .IsClean}}
-		<div class="i" data-id="{{.ID}}">
-			<div class="container">
-				<div class="thumb">
-					<a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
-				</div>
-				<div class="title">{{.Title}}</div>
-			</div>
+        <div class="i" data-id="{{.ID}}">
+            <div class="container">
+                <div class="thumb">
+                    <a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+                </div>
+                <div class="title">{{.Title}}</div>
+            </div>
         </div>
         {{end}}
         {{end}}
@@ -99,14 +99,14 @@ div.i div.title {
 
 <html>
 <head>
-	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta property="og:url" content="http://i.bittwiddlers.org/a/all">
     <meta property="og:type" content="website"/>
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="My Private Meme Collection"/>
     <meta property="og:description" content="A random collection of funny memes and animated GIFs I keep around for quick access."/>
     <meta property="og:image" content="http://i.bittwiddlers.org/t/KH3.png">
-	<title>Private Listing</title>
+    <title>Private Listing</title>
 
 <style type="text/css">
 html, body {
@@ -178,13 +178,13 @@ div.i div.title {
     <h2>There's a GIF for everything</h2>
     <div id="main">
         {{range .List}}
-		<div class="i" data-id="{{.ID}}">
-			<div class="container">
-				<div class="thumb">
-					<a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
-				</div>
-				<div class="title">{{.Title}}</div>
-			</div>
+        <div class="i" data-id="{{.ID}}">
+            <div class="container">
+                <div class="thumb">
+                    <a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
+                </div>
+                <div class="title">{{.Title}}</div>
+            </div>
         </div>
         {{end}}
     </div>

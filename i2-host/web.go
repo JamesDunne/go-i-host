@@ -283,6 +283,12 @@ func getListOnly(collectionName string, orderBy ImagesOrderBy) (list []Image, we
 	return
 }
 
+type viewTemplateModel struct {
+	BGColor    string
+	FillScreen bool
+	Image      ImageViewModel
+}
+
 // handles requests to upload images and rehost with shortened URLs
 func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 	// Set RemoteAddr for forwarded requests:
@@ -603,6 +609,53 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 		return
+	} else if v_id, ok := web.MatchSimpleRoute(req.URL.Path, "/view/yt"); ok {
+		// GET /view/yt/<video_id> to display a youtube player page for <video_id>, e.g. `dQw4w9WgXcQ`
+		model := viewTemplateModel{
+			BGColor:    "black",
+			FillScreen: true,
+			Image: *xlatImageViewModel(&Image{
+				ID:             int64(0),
+				Kind:           "youtube",
+				Title:          v_id,
+				SourceURL:      &v_id,
+				CollectionName: "",
+				Submitter:      "",
+				RedirectToID:   nil,
+				IsHidden:       true,
+				IsClean:        false,
+			}, nil),
+		}
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if web.AsWebError(uiTmpl.ExecuteTemplate(rsp, "view", model), http.StatusInternalServerError).RespondHTML(rsp) {
+			return
+		}
+		return
+	} else if imgurl, ok := web.MatchSimpleRouteRaw(req.URL.Path, "/view/img/"); ok {
+		// GET /view/img/<imgurl> to display an image viewer page for any URL <imgurl>, e.g. `//`
+		model := viewTemplateModel{
+			BGColor: "black",
+			Image: ImageViewModel{
+				ID:             int64(0),
+				Base62ID:       "_",
+				Title:          imgurl,
+				Kind:           "jpeg",
+				ImageURL:       imgurl,
+				ThumbURL:       "",
+				Submitter:      "",
+				CollectionName: "",
+				SourceURL:      &imgurl,
+				RedirectToID:   nil,
+				IsClean:        false,
+			},
+		}
+
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if web.AsWebError(uiTmpl.ExecuteTemplate(rsp, "view", model), http.StatusInternalServerError).RespondHTML(rsp) {
+			return
+		}
+		return
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/list"); ok {
 		list, werr := getList(collectionName, orderBy)
 		if werr.RespondJSON(rsp) {
@@ -770,10 +823,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			bgcolor = "gray"
 		}
 
-		model := struct {
-			BGColor string
-			Image   ImageViewModel
-		}{
+		model := viewTemplateModel{
 			BGColor: bgcolor,
 			Image:   *xlatImageViewModel(img, nil),
 		}

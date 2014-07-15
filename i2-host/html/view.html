@@ -2,7 +2,7 @@
 
 <html>
 <head>
-	<meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
     <meta property="og:url" content="http://i.bittwiddlers.org/b/{{.Base62ID}}">
     <meta property="og:type" content="website"/>
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
@@ -40,13 +40,13 @@ body {
 {{if (eq .Kind "youtube")}}
     <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}" frameborder="0" allowfullscreen></iframe>
 {{else}}
-	<img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
+    <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}
     <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 </div>
 <script>
 {{if (eq .Kind "youtube")}}
-	var iw = 560, ih = 315;
+    var iw = 560, ih = 315;
 {{else}}
     var iw = 1, ih = 1;
 {{end}}
@@ -65,21 +65,21 @@ body {
         loader.style.display = "none";
     }
 
-	function resize() {
-		var imain = document.getElementById("imain")
-		if ((imain === undefined) || (imain === null)) return;
-		set_new_size(imain);
-	}
+    function resize() {
+        var imain = document.getElementById("imain")
+        if ((imain === undefined) || (imain === null)) return;
+        set_new_size(imain);
+    }
 
     function set_new_size(img) {
         calc_new_size(img);
 {{if (eq .Kind "youtube")}}
-		img.style.display = "block";
+        img.style.display = "block";
         img.width = "" + nw;
         img.height = "" + nh;
 {{else}}
         img.style.display = "inline";
-		img.style.width = "" + nw + "px";
+        img.style.width = "" + nw + "px";
         img.style.height = "" + nh + "px";
 {{end}}
     }
@@ -89,19 +89,19 @@ body {
         var scale = 1;
         var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
 
-        if ((window.devicePixelRatio >= 2) || ((iw > sw) || (ih > sh))) {
-    		var wscale = sw / iw;
-    		var hscale = sh / ih;
-    		if (wscale < hscale)
-    			scale = wscale;
-    		else
-    			scale = hscale;
+        if ({{if not $.FillScreen}}(window.devicePixelRatio >= 2) || ((iw > sw) || (ih > sh)){{else}}true{{end}}) {
+            var wscale = sw / iw;
+            var hscale = sh / ih;
+            if (wscale < hscale)
+                scale = wscale;
+            else
+                scale = hscale;
         }
 
         // Set new dimensions:
-		nw = (iw * scale);
-		nh = (ih * scale);
-	}
+        nw = (iw * scale);
+        nh = (ih * scale);
+    }
 </script>
 </body>
 </html>

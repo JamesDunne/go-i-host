@@ -58,15 +58,19 @@ func main() {
 	api.Close()
 
 	// Watch the html templates for changes and reload them:
-	_, cleanup, err := web.WatchTemplates("ui", html_path(), "*.html", &uiTmpl)
+	_, cleanup, err := web.WatchTemplates("ui", html_path(), "*.html", nil, &uiTmpl)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return
 	}
 	defer cleanup()
 
 	// Start the server:
-	base.ServeMain(listen_addr, func(l net.Listener) error {
+	_, err = base.ServeMain(listen_addr, func(l net.Listener) error {
 		return http.Serve(l, http.HandlerFunc(requestHandler))
 	})
+	if err != nil {
+		log.Println(err)
+		return
+	}
 }
