@@ -7,11 +7,10 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"path/filepath"
 )
 
 import "github.com/JamesDunne/go-util/base"
-import "github.com/JamesDunne/go-util/fs/notify"
+import "github.com/JamesDunne/go-util/web"
 import "github.com/JamesDunne/i-host/base62"
 
 var (
@@ -31,68 +30,6 @@ func tmp_folder() string   { return base_folder + "/tmp" }
 var uiTmpl *template.Template
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
 
-// Watches the html/*.html templates for changes:
-func watchTemplates(name, templatePath, glob string) (watcher *notify.Watcher, err error, deferClean func()) {
-	// Parse template files:
-	tmplGlob := path.Join(templatePath, glob)
-	ui, err := template.New(name).ParseGlob(tmplGlob)
-	if err != nil {
-		return nil, err, nil
-	}
-	uiTmpl = ui
-
-	// Watch template directory for file changes:
-	watcher, err = notify.NewWatcher()
-	if err != nil {
-		return nil, err, nil
-	}
-	deferClean = func() { watcher.RemoveWatch(templatePath); watcher.Close() }
-
-	// Process watcher events
-	go func() {
-		for {
-			select {
-			case ev := <-watcher.Event:
-				if ev == nil {
-					break
-				}
-				//log.Println("event:", ev)
-
-				// Update templates:
-				var err error
-				ui, err := template.New(name).ParseGlob(tmplGlob)
-				if err != nil {
-					log.Println(err)
-					break
-				}
-				uiTmpl = ui
-			case err := <-watcher.Error:
-				if err == nil {
-					break
-				}
-				log.Println("watcher error:", err)
-			}
-		}
-	}()
-
-	// Watch template file for changes:
-	watcher.Watch(templatePath)
-
-	return
-}
-
-func canonicalPath(path string) string {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		panic(err)
-	}
-	abs, err = filepath.EvalSymlinks(abs)
-	if err != nil {
-		panic(err)
-	}
-	return abs
-}
-
 func main() {
 	// Define our commandline flags:
 	fs := flag.String("fs", ".", "Root directory of served files and templates")
@@ -108,7 +45,7 @@ func main() {
 
 	// Parse the flags and set values:
 	flag.Parse()
-	base_folder = canonicalPath(path.Clean(*fs))
+	base_folder = base.CanonicalPath(path.Clean(*fs))
 	xrGif = *xrGifArg
 	xrThumb = *xrThumbArg
 
@@ -121,7 +58,7 @@ func main() {
 	api.Close()
 
 	// Watch the html templates for changes and reload them:
-	_, err, cleanup := watchTemplates("ui", html_path(), "*.html")
+	_, cleanup, err := web.WatchTemplates("ui", html_path(), "*.html", &uiTmpl)
 	if err != nil {
 		log.Fatal(err)
 		return
