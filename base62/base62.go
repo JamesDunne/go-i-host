@@ -28,7 +28,7 @@ func NewEncoderOrPanic(alphabet string) *Encoder {
 // base62Encode encodes a number to a base62 string representation.
 func (e *Encoder) Encode(num int64) string {
 	if num == 0 {
-		return "0"
+		return string([]uint8{ e.alphabet[0] })
 	}
 
 	arr := []uint8{}
