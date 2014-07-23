@@ -286,8 +286,16 @@ func getListOnly(collectionName string, orderBy ImagesOrderBy) (list []Image, we
 type viewTemplateModel struct {
 	BGColor    string
 	FillScreen bool
-	Query      map[string][]string
+	Query      map[string]string
 	Image      ImageViewModel
+}
+
+func flattenQuery(query map[string][]string) (flat map[string]string) {
+	flat = make(map[string]string)
+	for k, v := range query {
+		flat[k] = v[0]
+	}
+	return
 }
 
 // handles requests to upload images and rehost with shortened URLs
@@ -615,7 +623,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		model := viewTemplateModel{
 			BGColor:    "black",
 			FillScreen: true,
-			Query:      req.URL.Query(),
+			Query:      flattenQuery(req.URL.Query()),
 			Image: *xlatImageViewModel(&Image{
 				ID:             int64(0),
 				Kind:           "youtube",
@@ -638,7 +646,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		// GET /view/img/<imgurl> to display an image viewer page for any URL <imgurl>, e.g. `//`
 		model := viewTemplateModel{
 			BGColor: "black",
-			Query:   req.URL.Query(),
+			Query:   flattenQuery(req.URL.Query()),
 			Image: ImageViewModel{
 				ID:             int64(0),
 				Base62ID:       "_",
@@ -828,7 +836,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		model := viewTemplateModel{
 			BGColor: bgcolor,
-			Query:   req.URL.Query(),
+			Query:   flattenQuery(req.URL.Query()),
 			Image:   *xlatImageViewModel(img, nil),
 		}
 
