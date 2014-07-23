@@ -38,7 +38,7 @@ body {
 <body onresize="resize()">
 <div id="container" data-id="{{.ID}}">
 {{if (eq .Kind "youtube")}}
-    <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}" frameborder="0" allowfullscreen></iframe>
+    <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls" 0)}}{{.}}{{else}}0{{end}}{{with (index $.Query "t" 0)}}&start={{. | urlquery}}{{end}}" frameborder="0" allowfullscreen></iframe>
 {{else}}
     <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}
