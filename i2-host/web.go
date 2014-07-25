@@ -448,7 +448,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 			web.JsonSuccess(rsp, &struct {
 				ID       int64  `json:"id"`
-				Base62ID string `json:"base62ID"`
+				Base62ID string `json:"base62id"`
 			}{
 				ID:       id,
 				Base62ID: b62.Encode(id + 10000),
@@ -535,7 +535,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 			web.JsonSuccess(rsp, &struct {
 				ID             int64  `json:"id"`
-				Base62ID       string `json:"base62ID"`
+				Base62ID       string `json:"base62id"`
 				Title          string `json:"title"`
 				CollectionName string `json:"collectionName,omitempty"`
 				Submitter      string `json:"submitter,omitempty"`
@@ -719,11 +719,13 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		model := &struct {
 			ID             int64  `json:"id"`
-			Base62ID       string `json:"base62ID"`
+			Base62ID       string `json:"base62id"`
 			Title          string `json:"title"`
 			CollectionName string `json:"collectionName,omitempty"`
 			Submitter      string `json:"submitter,omitempty"`
 			Kind           string `json:"kind"`
+			SourceURL      *string `json:"sourceURL,omitempty"`
+			RedirectToID   *int64  `json:"redirectToID,omitempty"`
 			Width          *int   `json:"width,omitempty"`
 			Height         *int   `json:"height,omitempty"`
 		}{
@@ -733,6 +735,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			Title:          img.Title,
 			CollectionName: img.CollectionName,
 			Submitter:      img.Submitter,
+			SourceURL:      img.SourceURL,
+			RedirectToID:   img.RedirectToID,
 		}
 		if model.Kind == "" {
 			model.Kind = "gif"
@@ -752,31 +756,6 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		}
 
 		web.JsonSuccess(rsp, model)
-		return
-	} else if req.URL.Path == "/api/list" {
-		// NOTE(jsd): DEPRECATED API!
-		var err error
-
-		list, werr := getListOnly("", orderBy)
-		if werr.RespondJSON(rsp) {
-			return
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel `json:"list"`
-		}{
-			List: projectModelList(list),
-		}
-
-		jsonText, err := json.Marshal(model)
-		if web.JsonErrorIf(rsp, err, http.StatusInternalServerError) {
-			return
-		}
-
-		rsp.Header().Set("Content-Type", "application/json; charset=utf-8")
-		rsp.WriteHeader(200)
-		rsp.Write(jsonText)
 		return
 	}
 
