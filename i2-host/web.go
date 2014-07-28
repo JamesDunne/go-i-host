@@ -259,6 +259,30 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 	return
 }
 
+func getImage(id int64) (img *Image, werr *web.WebError) {
+	werr = useAPI(func(api *API) *web.WebError {
+		var err error
+
+		img, err = api.GetImage(id)
+
+		return web.AsWebError(err, http.StatusInternalServerError)
+	})
+
+	return
+}
+
+func getAll(orderBy ImagesOrderBy) (list []Image, werr *web.WebError) {
+	werr = useAPI(func(api *API) *web.WebError {
+		var err error
+
+		list, err = api.GetAll(orderBy)
+
+		return web.AsWebError(err, http.StatusInternalServerError)
+	})
+
+	return
+}
+
 func getList(collectionName string, orderBy ImagesOrderBy) (list []Image, werr *web.WebError) {
 	werr = useAPI(func(api *API) *web.WebError {
 		var err error
@@ -454,7 +478,40 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Base62ID: b62.Encode(id + 10000),
 			})
 			return
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/update"); ok {
+			// TODO: Lock down based on basic_auth.username == collectionName.
+
+			id := b62.Decode(id_s) - 10000
+
+			// Get existing image for update:
+			img, werr := getImage(id)
+			if werr.RespondJSON(rsp) {
+				return
+			}
+
+			// Decode JSON straight onto Image record:
+			jd := json.NewDecoder(req.Body)
+			err := jd.Decode(img)
+			if web.JsonErrorIf(rsp, err, http.StatusBadRequest) {
+				return
+			}
+
+			// Process the update request:
+			if useAPI(func(api *API) *web.WebError {
+				return web.AsWebError(api.Update(img), http.StatusInternalServerError)
+			}).RespondJSON(rsp) {
+				return
+			}
+
+			web.JsonSuccess(rsp, &struct {
+				Success bool `json:"success"`
+			}{
+				Success: true,
+			})
+			return
 		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
+			// TODO: Lock down based on basic_auth.username == collectionName.
+
 			id := b62.Decode(id_s) - 10000
 
 			if useAPI(func(api *API) *web.WebError {
@@ -576,7 +633,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		return
 	} else if req.URL.Path == "/" {
 		// Render a list page:
-		list, werr := getList("", orderBy)
+		list, werr := getAll(orderBy)
 		if werr.RespondHTML(rsp) {
 			return
 		}
@@ -667,6 +724,21 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 		return
+	} else if ok := web.MatchExactRoute(req.URL.Path, "/api/v2/all"); ok {
+		list, werr := getAll(orderBy)
+		if werr.RespondJSON(rsp) {
+			return
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel `json:"list"`
+		}{
+			List: projectModelList(list),
+		}
+
+		web.JsonSuccess(rsp, &model)
+		return
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/list"); ok {
 		list, werr := getList(collectionName, orderBy)
 		if werr.RespondJSON(rsp) {
@@ -718,16 +790,16 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 		local_path := path.Join(store_folder(), strconv.FormatInt(img.ID, 10)+ext)
 
 		model := &struct {
-			ID             int64  `json:"id"`
-			Base62ID       string `json:"base62id"`
-			Title          string `json:"title"`
-			CollectionName string `json:"collectionName,omitempty"`
-			Submitter      string `json:"submitter,omitempty"`
-			Kind           string `json:"kind"`
+			ID             int64   `json:"id"`
+			Base62ID       string  `json:"base62id"`
+			Title          string  `json:"title"`
+			CollectionName string  `json:"collectionName,omitempty"`
+			Submitter      string  `json:"submitter,omitempty"`
+			Kind           string  `json:"kind"`
 			SourceURL      *string `json:"sourceURL,omitempty"`
 			RedirectToID   *int64  `json:"redirectToID,omitempty"`
-			Width          *int   `json:"width,omitempty"`
-			Height         *int   `json:"height,omitempty"`
+			Width          *int    `json:"width,omitempty"`
+			Height         *int    `json:"height,omitempty"`
 		}{
 			ID:             id,
 			Base62ID:       b62.Encode(id + 10000),

@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-import "github.com/JamesDunne/i-host/base62"
+import "github.com/JamesDunne/go-i-host/base62"
 
 var b62 *base62.Encoder = base62.NewEncoderOrPanic(base62.ShuffledAlphabet)
 

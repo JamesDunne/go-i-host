@@ -6,12 +6,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path"
 )
 
 import "github.com/JamesDunne/go-util/base"
 import "github.com/JamesDunne/go-util/web"
-import "github.com/JamesDunne/i-host/base62"
+import "github.com/JamesDunne/go-i-host/base62"
 
 var (
 	base_folder = "/srv/bittwiddlers.org/i2"
@@ -45,7 +46,13 @@ func main() {
 
 	// Parse the flags and set values:
 	flag.Parse()
+
+	// Make directories we need:
 	base_folder = base.CanonicalPath(path.Clean(*fs))
+	os.MkdirAll(store_folder(), 0775)
+	os.MkdirAll(thumb_folder(), 0775)
+	os.MkdirAll(tmp_folder(), 0775)
+
 	xrGif = *xrGifArg
 	xrThumb = *xrThumbArg
 

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	_ "github.com/JamesDunne/go-util/base"
 	_ "github.com/JamesDunne/go-util/db/sqlite3"
 	"github.com/JamesDunne/go-util/db/sqlx"
+	"strconv"
+	"strings"
 )
 
 type API struct {
@@ -117,6 +120,44 @@ type dbImage struct {
 	IsClean        int64          `db:"IsClean"`
 }
 
+type columnNameSet []string
+
+func (names columnNameSet) ToCommaDelimited() string {
+	return strings.Join(names, ", ")
+}
+
+func (names columnNameSet) ToUpdateSet(startArg int) string {
+	if len(names) == 0 {
+		return ""
+	}
+	if len(names) == 1 {
+		return names[0]
+	}
+
+	sep := ", "
+	n := len(sep) * (len(names) - 1)
+	for i := 0; i < len(names); i++ {
+		n += len(names[i])
+		n += (5 + (i / 10) + 1)
+	}
+
+	b := make([]byte, 0, n)
+	buf := bytes.NewBuffer(b)
+	buf.WriteString(names[0])
+	buf.WriteString(" = ?")
+	buf.WriteString(strconv.FormatInt(int64(startArg), 10))
+	for i, s := range names[1:] {
+		buf.WriteString(sep)
+		buf.WriteString(s)
+		buf.WriteString(" = ?")
+		buf.WriteString(strconv.FormatInt(int64(startArg+i+1), 10))
+	}
+	return buf.String()
+}
+
+var nonIDColumnNames = []string{"Kind", "Title", "SourceURL", "CollectionName", "Submitter", "RedirectToID", "IsHidden", "IsClean"}
+var nonIDColumns = columnNameSet(nonIDColumnNames).ToCommaDelimited()
+
 func mapRecToModel(r *dbImage, m *Image) *Image {
 	if m == nil {
 		m = &Image{}
@@ -131,35 +172,6 @@ func mapRecToModel(r *dbImage, m *Image) *Image {
 	m.IsHidden = int64ToBool(r.IsHidden)
 	m.IsClean = int64ToBool(r.IsClean)
 	return m
-}
-
-const nonIDColumns = "Kind, Title, SourceURL, CollectionName, Submitter, RedirectToID, IsHidden, IsClean"
-
-func (api *API) NewImage(img *Image) (int64, error) {
-	var query string
-	var args []interface{}
-	if img.ID <= 0 {
-		// Insert a new record:
-		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-		args = []interface{}{img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
-	} else {
-		// Do an identity insert:
-		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
-		args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
-	}
-
-	res, err := api.db.Exec(query, args...)
-	if err != nil {
-		return 0, err
-	}
-
-	// Get last inserted ID:
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
 }
 
 func (api *API) GetImage(id int64) (img *Image, err error) {
@@ -200,6 +212,22 @@ func (orderBy ImagesOrderBy) ToSQL() string {
 	return ob
 }
 
+func (api *API) GetAll(orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := orderBy.ToSQL()
+
+	recs := make([]dbImage, 0, 200)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image `+ob)
+	if err != nil {
+		return
+	}
+
+	imgs = make([]Image, len(recs))
+	for i, _ := range recs {
+		mapRecToModel(&recs[i], &imgs[i])
+	}
+	return
+}
+
 func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
 	ob := orderBy.ToSQL()
 
@@ -230,6 +258,49 @@ func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs 
 		mapRecToModel(&recs[i], &imgs[i])
 	}
 	return
+}
+
+func (api *API) NewImage(img *Image) (int64, error) {
+	var query string
+	var args []interface{}
+	if img.ID <= 0 {
+		// Insert a new record:
+		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
+		args = []interface{}{img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+	} else {
+		// Do an identity insert:
+		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+		args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+	}
+
+	res, err := api.db.Exec(query, args...)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get last inserted ID:
+	id, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
+func (api *API) Update(img *Image) error {
+	var query string
+	var args []interface{}
+
+	// Update an existing record:
+	query = `update Image set ` + columnNameSet(nonIDColumnNames).ToUpdateSet(2) + ` where ID = ?1`
+	args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+
+	_, err := api.db.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (api *API) Delete(id int64) (err error) {
