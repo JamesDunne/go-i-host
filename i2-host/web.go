@@ -447,7 +447,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			redir_url := path.Join("/b/", b62.Encode(id+10000))
 			http.Redirect(rsp, req, redir_url, 302)
 			return
-		} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/add"); ok {
+		} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/add"); ok {
 			// Add a new image via URL to download from via JSON API:
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
@@ -478,7 +478,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Base62ID: b62.Encode(id + 10000),
 			})
 			return
-		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/update"); ok {
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/update"); ok {
 			// TODO: Lock down based on basic_auth.username == collectionName.
 
 			id := b62.Decode(id_s) - 10000
@@ -509,7 +509,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Success: true,
 			})
 			return
-		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/delete"); ok {
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/delete"); ok {
 			// TODO: Lock down based on basic_auth.username == collectionName.
 
 			id := b62.Decode(id_s) - 10000
@@ -526,7 +526,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 				Success: true,
 			})
 			return
-		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/crop"); ok {
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/crop"); ok {
 			id := b62.Decode(id_s) - 10000
 
 			cr := &struct {
@@ -724,7 +724,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			return
 		}
 		return
-	} else if ok := web.MatchExactRoute(req.URL.Path, "/api/v2/all"); ok {
+	} else if ok := web.MatchExactRoute(req.URL.Path, "/api/v1/all"); ok {
 		list, werr := getAll(orderBy)
 		if werr.RespondJSON(rsp) {
 			return
@@ -739,7 +739,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		web.JsonSuccess(rsp, &model)
 		return
-	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/list"); ok {
+	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/list"); ok {
 		list, werr := getList(collectionName, orderBy)
 		if werr.RespondJSON(rsp) {
 			return
@@ -754,7 +754,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		web.JsonSuccess(rsp, &model)
 		return
-	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/only"); ok {
+	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/only"); ok {
 		list, werr := getListOnly(collectionName, orderBy)
 		if werr.RespondJSON(rsp) {
 			return
@@ -769,7 +769,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 
 		web.JsonSuccess(rsp, &model)
 		return
-	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v2/info"); ok {
+	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
 		id := b62.Decode(id_s) - 10000
 
 		var img *Image
