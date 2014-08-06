@@ -694,6 +694,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) {
 			}, nil),
 		}
 
+		// Set controls=1 if it's missing:
+		if _, ok := model.Query["controls"]; !ok {
+			model.Query["controls"] = "1"
+		}
+
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if web.AsWebError(uiTmpl.ExecuteTemplate(rsp, "view", model), http.StatusInternalServerError).RespondHTML(rsp) {
 			return
