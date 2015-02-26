@@ -74,7 +74,7 @@ func main() {
 
 	// Start the server:
 	_, err = base.ServeMain(listen_addr, func(l net.Listener) error {
-		return http.Serve(l, http.HandlerFunc(requestHandler))
+		return http.Serve(l, web.ReportErrors(web.Log(web.DefaultErrorLog, web.ErrorHandlerFunc(requestHandler))))
 	})
 	if err != nil {
 		log.Println(err)
