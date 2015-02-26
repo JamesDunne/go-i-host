@@ -15,7 +15,7 @@ import "github.com/JamesDunne/go-util/web"
 import "github.com/JamesDunne/go-i-host/base62"
 
 var (
-	base_folder = "/srv/bittwiddlers.org/i2"
+	base_folder = "."
 	xrGif       = "/p-g/"
 	xrThumb     = "/p-t/"
 )
