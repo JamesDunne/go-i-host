@@ -1,3 +1,4 @@
+.DS_Store
 *.exe
 sqlite.db
 /i2-host/i2-host

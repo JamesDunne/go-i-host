@@ -10,6 +10,8 @@
     <meta property="og:description" content=""/>
 {{if (eq .Kind "youtube")}}
     <meta property="og:image" content="{{.ThumbURL}}">
+{{else if (eq .Kind "imgur-gifv")}}
+    <meta property="og:image" content="{{.ThumbURL}}">
 {{else}}
     <meta property="og:image" content="http://i.bittwiddlers.org{{.ThumbURL}}">
 {{end}}
@@ -39,10 +41,14 @@ body {
 <div id="container" data-id="{{.ID}}">
 {{if (eq .Kind "youtube")}}
     <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}{{with (index $.Query "t")}}&start={{.}}{{end}}" frameborder="0" allowfullscreen></iframe>
+{{else if (eq .Kind "imgur-gifv")}}
+	<video id="imain" src="{{.ImageURL}}" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline></video>
 {{else}}
     <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}
+{{if not (eq .Kind "imgur-gifv")}}
     <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
+{{end}}
 </div>
 <script>
 {{if (eq .Kind "youtube")}}

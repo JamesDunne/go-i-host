@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"path/filepath"
 	//"log"
 	"net/http"
 	"net/url"
@@ -26,6 +27,10 @@ func imageKindTo(imageKind string) (mimeType, ext, thumbExt string) {
 		return "image/gif", ".gif", ".png"
 	}
 	return "", "", ""
+}
+
+func filename(path string) string {
+	return path[:len(path)-len(filepath.Ext(path))]
 }
 
 type ImageViewModel struct {
@@ -65,9 +70,16 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	case "youtube":
 		o.ImageURL = "//www.youtube.com/embed/" + *i.SourceURL
 		o.ThumbURL = "//i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
+		break
+	case "imgur-gifv":
+		hash := filename(*i.SourceURL)
+		o.ImageURL = "//i.imgur.com/" + hash + ".mp4"
+		o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
+		break
 	default:
 		o.ImageURL = "/" + o.Base62ID + ext
 		o.ThumbURL = "/t/" + o.Base62ID + thumbExt
+		break
 	}
 
 	return o
@@ -203,6 +215,14 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 		store.Kind = "youtube"
 		store.LocalPath = ""
 		store.SourceURL = imgurl.Query().Get("v")
+		return nil
+	}
+
+	// Check for imgur's gifv format:
+	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "i.imgur.com") && (filepath.Ext(imgurl.Path) == ".gifv") {
+		store.Kind = "imgur-gifv"
+		store.LocalPath = ""
+		store.SourceURL = filename(imgurl.Path)
 		return nil
 	}
 
