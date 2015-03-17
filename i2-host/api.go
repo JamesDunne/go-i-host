@@ -282,6 +282,15 @@ func (api *API) GetAll(orderBy ImagesOrderBy) (imgs []Image, err error) {
 }
 
 func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	// Special collection name "all" yields all images across all collections.
+	if collectionName == "all" {
+		return api.GetAll(orderBy)
+	}
+	// Blank collection name would be redundant here:
+	if collectionName == "" {
+		return api.GetListOnly("", orderBy)
+	}
+
 	ob := orderBy.ToSQL()
 
 	recs := make([]dbImage, 0, 200)
@@ -298,6 +307,11 @@ func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Im
 }
 
 func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	// Special collection name "all" yields all images across all collections.
+	if collectionName == "all" {
+		return api.GetAll(orderBy)
+	}
+
 	ob := orderBy.ToSQL()
 
 	recs := make([]dbImage, 0, 200)
