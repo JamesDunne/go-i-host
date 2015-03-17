@@ -6,6 +6,7 @@ import (
 	"image"
 	"io"
 	"path/filepath"
+	"strings"
 	//"log"
 	"net/http"
 	"net/url"
@@ -770,7 +771,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		list, werr := getList(collectionName, false, orderBy)
 		return apiListResult(rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
-		keywords := req_query["q"]
+		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
+		keywords := strings.Split(strings.Join(req_query["q"], " "), " ")
 		list, werr := search(collectionName, true, keywords)
 		return apiListResult(rsp, list, werr)
 	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
