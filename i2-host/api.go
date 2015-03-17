@@ -238,95 +238,6 @@ func (api *API) GetImage(id int64) (img *Image, err error) {
 	return
 }
 
-type ImagesOrderBy int
-
-const (
-	ImagesOrderByTitleASC  ImagesOrderBy = iota
-	ImagesOrderByTitleDESC ImagesOrderBy = iota
-	ImagesOrderByIDASC     ImagesOrderBy = iota
-	ImagesOrderByIDDESC    ImagesOrderBy = iota
-)
-
-func (orderBy ImagesOrderBy) ToSQL() string {
-	var ob string
-	switch orderBy {
-	default:
-		fallthrough
-	case ImagesOrderByTitleASC:
-		ob = "order by Title ASC"
-	case ImagesOrderByTitleDESC:
-		ob = "order by Title DESC"
-	case ImagesOrderByIDASC:
-		ob = "order by ID ASC"
-	case ImagesOrderByIDDESC:
-		ob = "order by ID DESC"
-	}
-
-	return ob
-}
-
-func (api *API) GetAll(orderBy ImagesOrderBy) (imgs []Image, err error) {
-	ob := orderBy.ToSQL()
-
-	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image `+ob)
-	if err != nil {
-		return
-	}
-
-	imgs = make([]Image, len(recs))
-	for i, _ := range recs {
-		mapRecToModel(&recs[i], &imgs[i])
-	}
-	return
-}
-
-func (api *API) GetList(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
-	// Special collection name "all" yields all images across all collections.
-	if collectionName == "all" {
-		return api.GetAll(orderBy)
-	}
-	// Blank collection name would be redundant here:
-	if collectionName == "" {
-		return api.GetListOnly("", orderBy)
-	}
-
-	ob := orderBy.ToSQL()
-
-	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 or CollectionName = '' `+ob, collectionName)
-	if err != nil {
-		return
-	}
-
-	imgs = make([]Image, len(recs))
-	for i, _ := range recs {
-		mapRecToModel(&recs[i], &imgs[i])
-	}
-	return
-}
-
-func (api *API) GetListOnly(collectionName string, orderBy ImagesOrderBy) (imgs []Image, err error) {
-	// Special collection name "all" yields all images across all collections.
-	if collectionName == "all" {
-		return api.GetAll(orderBy)
-	}
-
-	ob := orderBy.ToSQL()
-
-	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 `+ob, collectionName)
-	if err != nil {
-		return
-	}
-
-	imgs = make([]Image, len(recs))
-	for i, _ := range recs {
-		mapRecToModel(&recs[i], &imgs[i])
-	}
-	return
-}
-
 func (api *API) NewImage(img *Image) (int64, error) {
 	var query string
 	var args []interface{}
@@ -373,6 +284,156 @@ func (api *API) Update(img *Image) error {
 func (api *API) Delete(id int64) (err error) {
 	_, err = api.db.Exec(`delete from Image where ID = ?1`, id)
 	return
+}
+
+type ImagesOrderBy int
+
+const (
+	ImagesOrderByTitleASC  ImagesOrderBy = iota
+	ImagesOrderByTitleDESC ImagesOrderBy = iota
+	ImagesOrderByIDASC     ImagesOrderBy = iota
+	ImagesOrderByIDDESC    ImagesOrderBy = iota
+)
+
+func (orderBy ImagesOrderBy) ToSQL() string {
+	var ob string
+	switch orderBy {
+	default:
+		fallthrough
+	case ImagesOrderByTitleASC:
+		ob = "order by Title ASC"
+	case ImagesOrderByTitleDESC:
+		ob = "order by Title DESC"
+	case ImagesOrderByIDASC:
+		ob = "order by ID ASC"
+	case ImagesOrderByIDDESC:
+		ob = "order by ID DESC"
+	}
+
+	return ob
+}
+
+func (api *API) GetAll(orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := orderBy.ToSQL()
+
+	recs := make([]dbImage, 0, 200)
+	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image `+ob)
+	if err != nil {
+		return
+	}
+
+	imgs = make([]Image, len(recs))
+	for i, _ := range recs {
+		mapRecToModel(&recs[i], &imgs[i])
+	}
+	return
+}
+
+func (api *API) GetList(collectionName string, includeBase bool, orderBy ImagesOrderBy) (imgs []Image, err error) {
+	ob := orderBy.ToSQL()
+
+	recs := make([]dbImage, 0, 200)
+
+	if collectionName == "all" {
+		// Special collection name "all" yields all images across all collections.
+		err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image `+ob)
+	} else {
+		if includeBase {
+			// Include items from base collection:
+			err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 or CollectionName = '' `+ob, collectionName)
+		} else {
+			// Only query items from specific collection:
+			err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image where CollectionName = ?1 `+ob, collectionName)
+		}
+	}
+	if err != nil {
+		return
+	}
+
+	imgs = make([]Image, len(recs))
+	for i, _ := range recs {
+		mapRecToModel(&recs[i], &imgs[i])
+	}
+	return
+}
+
+func keywordMatch(keywords []string, list []Image) (winners []Image) {
+	// No keywords means match all:
+	if keywords == nil || len(keywords) == 0 {
+		return list
+	}
+
+	highest := -1
+	highest_idxs := make([]int, 0, 20)
+	for idx, img := range list {
+		words := strings.Split(img.Keywords, " ")
+
+		h := -2
+
+		// Add points for each keyword match:
+		last_word_idx := -1
+		// TODO(jsd): Don't count single-word matches on useless filler words like articles; only count them if in a phrase.
+		for _, keyword := range keywords {
+			found := false
+			for word_idx, word := range words {
+				if word == keyword {
+					found = true
+
+					if last_word_idx > -1 {
+						if word_idx > last_word_idx+1 {
+							// Penalize distance (word count) from last word found (helps phrases match better):
+							h -= ((word_idx - last_word_idx) + 1)
+						}
+					}
+
+					h += 10
+					h = (h * 20) / 16
+					last_word_idx = word_idx
+
+					// Only trigger once per keyword:
+					break
+				}
+			}
+
+			// All keywords are required to match:
+			if !found {
+				h = -2
+				break
+			}
+		}
+
+		if h > -2 {
+			//log.Printf("  %4d %s\n", h, img.Title)
+
+			if h > highest {
+				highest = h
+				// Build a new list of winners at this index:
+				highest_idxs = highest_idxs[:0]
+				highest_idxs = append(highest_idxs, idx)
+			} else if h == highest {
+				// Add to the winning pool:
+				highest_idxs = append(highest_idxs, idx)
+			}
+		}
+	}
+
+	winners = make([]Image, 0, len(highest_idxs))
+	for _, idx := range highest_idxs {
+		winners = append(winners, list[idx])
+	}
+	return
+}
+
+func (api *API) Search(collectionName string, includeBase bool, keywords []string) (winners []Image, err error) {
+	// Pull down records server-side and search through them:
+	imgs, err := api.GetList(collectionName, includeBase, ImagesOrderByIDASC)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the winners by keyword match:
+	winners = keywordMatch(keywords, imgs)
+	return winners, nil
 }
 
 // ------

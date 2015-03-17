@@ -300,11 +300,11 @@ func getImage(id int64) (img *Image, werr *web.Error) {
 	return
 }
 
-func getAll(orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
+func getList(collectionName string, includeBase bool, orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
 	werr = useAPI(func(api *API) *web.Error {
 		var err error
 
-		list, err = api.GetAll(orderBy)
+		list, err = api.GetList(collectionName, includeBase, orderBy)
 
 		return web.AsError(err, http.StatusInternalServerError)
 	})
@@ -312,23 +312,11 @@ func getAll(orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
 	return
 }
 
-func getList(collectionName string, orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
+func search(collectionName string, includeBase bool, keywords []string) (list []Image, werr *web.Error) {
 	werr = useAPI(func(api *API) *web.Error {
 		var err error
 
-		list, err = api.GetList(collectionName, orderBy)
-
-		return web.AsError(err, http.StatusInternalServerError)
-	})
-
-	return
-}
-
-func getListOnly(collectionName string, orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
-	werr = useAPI(func(api *API) *web.Error {
-		var err error
-
-		list, err = api.GetListOnly(collectionName, orderBy)
+		list, err = api.Search(collectionName, includeBase, keywords)
 
 		return web.AsError(err, http.StatusInternalServerError)
 	})
@@ -644,12 +632,13 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	}
 
 	// GET:
-	_, showUnclean := req.URL.Query()["all"]
+	req_query := req.URL.Query()
+	_, showUnclean := req_query["all"]
 
 	var orderBy ImagesOrderBy
-	if _, ok := req.URL.Query()["newest"]; ok {
+	if _, ok := req_query["newest"]; ok {
 		orderBy = ImagesOrderByIDDESC
-	} else if _, ok := req.URL.Query()["oldest"]; ok {
+	} else if _, ok := req_query["oldest"]; ok {
 		orderBy = ImagesOrderByIDASC
 	} else {
 		orderBy = ImagesOrderByTitleASC
@@ -659,7 +648,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return web.NewError(nil, http.StatusNoContent, web.Empty)
 	} else if req.URL.Path == "/" {
 		// Render a list page:
-		list, werr := getAll(orderBy)
+		list, werr := getList("all", false, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
@@ -667,7 +656,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		listCollection(rsp, req, "", list, showUnclean)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/list"); ok {
-		list, werr := getList(collectionName, orderBy)
+		list, werr := getList(collectionName, true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
@@ -675,7 +664,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		listCollection(rsp, req, collectionName, list, showUnclean)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/only"); ok {
-		list, werr := getListOnly(collectionName, orderBy)
+		list, werr := getList(collectionName, false, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
@@ -706,7 +695,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		model := viewTemplateModel{
 			BGColor:    "black",
 			FillScreen: true,
-			Query:      flattenQuery(req.URL.Query()),
+			Query:      flattenQuery(req_query),
 			Image: *xlatImageViewModel(&Image{
 				ID:             int64(0),
 				Kind:           "youtube",
@@ -735,7 +724,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		// GET /view/img/<imgurl> to display an image viewer page for any URL <imgurl>, e.g. `//`
 		model := viewTemplateModel{
 			BGColor: "black",
-			Query:   flattenQuery(req.URL.Query()),
+			Query:   flattenQuery(req_query),
 			Image: ImageViewModel{
 				ID:             int64(0),
 				Base62ID:       "_",
@@ -757,23 +746,9 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			return werr.AsHTML()
 		}
 		return nil
-	} else if ok := web.MatchExactRoute(req.URL.Path, "/api/v1/all"); ok {
-		list, werr := getAll(orderBy)
-		if werr != nil {
-			return werr.AsJSON()
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel `json:"list"`
-		}{
-			List: projectModelList(list),
-		}
-
-		web.JsonSuccess(rsp, &model)
-		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/list"); ok {
-		list, werr := getList(collectionName, orderBy)
+		// `/api/v1/list/all` returns all images across all collections.
+		list, werr := getList(collectionName, true, orderBy)
 		if werr != nil {
 			return werr.AsJSON()
 		}
@@ -788,7 +763,23 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		web.JsonSuccess(rsp, &model)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/only"); ok {
-		list, werr := getListOnly(collectionName, orderBy)
+		list, werr := getList(collectionName, false, orderBy)
+		if werr != nil {
+			return werr.AsJSON()
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel `json:"list"`
+		}{
+			List: projectModelList(list),
+		}
+
+		web.JsonSuccess(rsp, &model)
+		return nil
+	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
+		keywords := req_query["q"]
+		list, werr := search(collectionName, true, keywords)
 		if werr != nil {
 			return werr.AsJSON()
 		}
@@ -919,7 +910,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 		model := viewTemplateModel{
 			BGColor: bgcolor,
-			Query:   flattenQuery(req.URL.Query()),
+			Query:   flattenQuery(req_query),
 			Image:   *xlatImageViewModel(img, nil),
 		}
 
