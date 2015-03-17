@@ -11,6 +11,21 @@ import (
 	"strings"
 )
 
+// Runes used to split words:
+const wordSplitters = " \n\t:,;.-+=[]!?()$%^&*<>\"`"
+
+// Split a string into separate words:
+func splitToWords(text string) []string {
+	return strings.FieldsFunc(
+		text,
+		func(c rune) bool { return strings.ContainsRune(wordSplitters, c) },
+	)
+}
+
+func titleToKeywords(title string) string {
+	return strings.Join(splitToWords(strings.ToLower(title)), " ")
+}
+
 type API struct {
 	db *sqlx.DB
 }

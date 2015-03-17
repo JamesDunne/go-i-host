@@ -146,6 +146,11 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 			Keywords:       req.Keywords,
 		}
 
+		// Generate keywords from title:
+		if newImage.Keywords == "" {
+			newImage.Keywords = titleToKeywords(newImage.Title)
+		}
+
 		if req.LocalPath != "" {
 			// Do some local image processing first:
 			var firstImage image.Image
@@ -512,6 +517,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			err := jd.Decode(img)
 			if werr := web.AsError(err, http.StatusBadRequest); werr != nil {
 				return werr.AsJSON()
+			}
+
+			// Generate keywords from title:
+			if img.Keywords == "" {
+				img.Keywords = titleToKeywords(img.Title)
 			}
 
 			// Process the update request:
