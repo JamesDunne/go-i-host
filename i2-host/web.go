@@ -324,6 +324,22 @@ func search(collectionName string, includeBase bool, keywords []string) (list []
 	return
 }
 
+func apiListResult(rsp http.ResponseWriter, list []Image, werr *web.Error) *web.Error {
+	if werr != nil {
+		return werr.AsJSON()
+	}
+
+	// Project into a view model:
+	model := struct {
+		List []ImageViewModel `json:"list"`
+	}{
+		List: projectModelList(list),
+	}
+
+	web.JsonSuccess(rsp, &model)
+	return nil
+}
+
 type viewTemplateModel struct {
 	BGColor    string
 	FillScreen bool
@@ -749,50 +765,14 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/list"); ok {
 		// `/api/v1/list/all` returns all images across all collections.
 		list, werr := getList(collectionName, true, orderBy)
-		if werr != nil {
-			return werr.AsJSON()
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel `json:"list"`
-		}{
-			List: projectModelList(list),
-		}
-
-		web.JsonSuccess(rsp, &model)
-		return nil
+		return apiListResult(rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/only"); ok {
 		list, werr := getList(collectionName, false, orderBy)
-		if werr != nil {
-			return werr.AsJSON()
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel `json:"list"`
-		}{
-			List: projectModelList(list),
-		}
-
-		web.JsonSuccess(rsp, &model)
-		return nil
+		return apiListResult(rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
 		keywords := req_query["q"]
 		list, werr := search(collectionName, true, keywords)
-		if werr != nil {
-			return werr.AsJSON()
-		}
-
-		// Project into a view model:
-		model := struct {
-			List []ImageViewModel `json:"list"`
-		}{
-			List: projectModelList(list),
-		}
-
-		web.JsonSuccess(rsp, &model)
-		return nil
+		return apiListResult(rsp, list, werr)
 	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
 		id := b62.Decode(id_s) - 10000
 
