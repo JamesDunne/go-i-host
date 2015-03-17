@@ -88,6 +88,13 @@ create table if not exists Image (
 		)
 		userVersion = "3"
 	}
+	if userVersion == "3" {
+		api.ddl(
+			`alter table Image add column Keywords TEXT NOT NULL DEFAULT ''`,
+			`pragma user_version = 4`,
+		)
+		userVersion = "4"
+	}
 
 	return
 }
@@ -96,6 +103,7 @@ func (api *API) Close() {
 	api.db.Close()
 }
 
+// API entity
 type Image struct {
 	ID             int64
 	Kind           string
@@ -106,8 +114,12 @@ type Image struct {
 	RedirectToID   *int64
 	IsHidden       bool
 	IsClean        bool
+	Keywords       string
 }
 
+type columnNameSet []string
+
+// Direct database entity (internal use only)
 type dbImage struct {
 	ID             int64          `db:"ID"`
 	Kind           string         `db:"Kind"`
@@ -118,9 +130,37 @@ type dbImage struct {
 	RedirectToID   sql.NullInt64  `db:"RedirectToID"`
 	IsHidden       int64          `db:"IsHidden"`
 	IsClean        int64          `db:"IsClean"`
+	Keywords       string         `db:"Keywords"`
 }
 
-type columnNameSet []string
+var nonIDColumnNames = []string{
+	"Kind",
+	"Title",
+	"SourceURL",
+	"CollectionName",
+	"Submitter",
+	"RedirectToID",
+	"IsHidden",
+	"IsClean",
+	"Keywords",
+}
+var nonIDColumns = columnNameSet(nonIDColumnNames).ToCommaDelimited()
+
+// Convert to an `[]interface{}` for passing as params to SQL query:
+func (img *Image) toSQLArgs() []interface{} {
+	return []interface{}{
+		img.ID,
+		img.Kind,
+		img.Title,
+		ptrToNullString(img.SourceURL),
+		img.CollectionName,
+		img.Submitter,
+		ptrToNullInt64(img.RedirectToID),
+		boolToInt64(img.IsHidden),
+		boolToInt64(img.IsClean),
+		img.Keywords,
+	}
+}
 
 func (names columnNameSet) ToCommaDelimited() string {
 	return strings.Join(names, ", ")
@@ -155,9 +195,6 @@ func (names columnNameSet) ToUpdateSet(startArg int) string {
 	return buf.String()
 }
 
-var nonIDColumnNames = []string{"Kind", "Title", "SourceURL", "CollectionName", "Submitter", "RedirectToID", "IsHidden", "IsClean"}
-var nonIDColumns = columnNameSet(nonIDColumnNames).ToCommaDelimited()
-
 func mapRecToModel(r *dbImage, m *Image) *Image {
 	if m == nil {
 		m = &Image{}
@@ -171,6 +208,7 @@ func mapRecToModel(r *dbImage, m *Image) *Image {
 	m.RedirectToID = nullInt64ToPtr(r.RedirectToID)
 	m.IsHidden = int64ToBool(r.IsHidden)
 	m.IsClean = int64ToBool(r.IsClean)
+	m.Keywords = r.Keywords
 	return m
 }
 
@@ -265,12 +303,12 @@ func (api *API) NewImage(img *Image) (int64, error) {
 	var args []interface{}
 	if img.ID <= 0 {
 		// Insert a new record:
-		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`
-		args = []interface{}{img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+		query = `insert into Image (` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
+		args = img.toSQLArgs()[1:]
 	} else {
 		// Do an identity insert:
-		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
-		args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+		query = `insert into Image (ID, ` + nonIDColumns + `) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+		args = img.toSQLArgs()
 	}
 
 	res, err := api.db.Exec(query, args...)
@@ -293,7 +331,7 @@ func (api *API) Update(img *Image) error {
 
 	// Update an existing record:
 	query = `update Image set ` + columnNameSet(nonIDColumnNames).ToUpdateSet(2) + ` where ID = ?1`
-	args = []interface{}{img.ID, img.Kind, img.Title, ptrToNullString(img.SourceURL), img.CollectionName, img.Submitter, ptrToNullInt64(img.RedirectToID), boolToInt64(img.IsHidden), boolToInt64(img.IsClean)}
+	args = img.toSQLArgs()
 
 	_, err := api.db.Exec(query, args...)
 	if err != nil {

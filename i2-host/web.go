@@ -45,6 +45,7 @@ type ImageViewModel struct {
 	SourceURL      *string `json:"sourceURL,omitempty"`
 	RedirectToID   *int64  `json:"redirectToID,omitempty"`
 	IsClean        bool    `json:"isClean"`
+	Keywords       string  `json:"keywords,omitempty"`
 }
 
 func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
@@ -61,6 +62,7 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	o.IsClean = i.IsClean
 	o.CollectionName = i.CollectionName
 	o.Submitter = i.Submitter
+	o.Keywords = i.Keywords
 
 	if o.Kind == "" {
 		o.Kind = "gif"
@@ -119,6 +121,7 @@ type imageStoreRequest struct {
 	SourceURL string `json:"sourceURL"`
 	Submitter string `json:"submitter"`
 	IsClean   bool   `json:"isClean"`
+	Keywords  string `json:"keywords"`
 
 	CollectionName string
 	LocalPath      string
@@ -140,6 +143,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 			CollectionName: req.CollectionName,
 			Submitter:      req.Submitter,
 			IsClean:        req.IsClean,
+			Keywords:       req.Keywords,
 		}
 
 		if req.LocalPath != "" {
@@ -503,7 +507,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				return werr.AsJSON()
 			}
 
-			// Decode JSON straight onto Image record:
+			// Decode JSON straight onto existing Image record:
 			jd := json.NewDecoder(req.Body)
 			err := jd.Decode(img)
 			if werr := web.AsError(err, http.StatusBadRequest); werr != nil {
@@ -703,6 +707,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				RedirectToID:   nil,
 				IsHidden:       true,
 				IsClean:        false,
+				Keywords:       "",
 			}, nil),
 		}
 
@@ -733,6 +738,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				SourceURL:      &imgurl,
 				RedirectToID:   nil,
 				IsClean:        false,
+				Keywords:       "",
 			},
 		}
 
