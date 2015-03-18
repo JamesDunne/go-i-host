@@ -72,15 +72,17 @@ body {
 		</form>
 	</div>
 {{end}}
-<script type="text/javascript">
+<script>
 {{if (eq .Kind "youtube")}}
     var iw = 560, ih = 315;
 {{else}}
     var iw = 1, ih = 1;
 {{end}}
     var nw = 1, nh = 1;
+	var is_loaded = false;
 
     function loaded(img) {
+		is_loaded = true;
 {{if not (eq .Kind "youtube")}}
         // Grab these values on load of img because they may change later on:
         iw = img.width;
@@ -94,6 +96,7 @@ body {
     }
 
     function resize() {
+		if (!is_loaded) return;
         var imain = document.getElementById("imain")
         if ((imain === undefined) || (imain === null)) return;
         set_new_size(imain);
