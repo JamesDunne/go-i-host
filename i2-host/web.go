@@ -689,12 +689,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	_, showUnclean := req_query["all"]
 
 	var orderBy ImagesOrderBy
-	if _, ok := req_query["newest"]; ok {
-		orderBy = ImagesOrderByIDDESC
+	if _, ok := req_query["title"]; ok {
+		orderBy = ImagesOrderByTitleASC
 	} else if _, ok := req_query["oldest"]; ok {
 		orderBy = ImagesOrderByIDASC
 	} else {
-		orderBy = ImagesOrderByTitleASC
+		orderBy = ImagesOrderByIDDESC
 	}
 
 	if req.URL.Path == "/favicon.ico" {

@@ -298,14 +298,14 @@ const (
 func (orderBy ImagesOrderBy) ToSQL() string {
 	var ob string
 	switch orderBy {
-	default:
-		fallthrough
 	case ImagesOrderByTitleASC:
-		ob = "order by Title ASC"
+		ob = "order by Title COLLATE NOCASE ASC"
 	case ImagesOrderByTitleDESC:
-		ob = "order by Title DESC"
+		ob = "order by Title COLLATE NOCASE DESC"
 	case ImagesOrderByIDASC:
 		ob = "order by ID ASC"
+	default:
+		fallthrough
 	case ImagesOrderByIDDESC:
 		ob = "order by ID DESC"
 	}
@@ -426,7 +426,7 @@ func keywordMatch(keywords []string, list []Image) (winners []Image) {
 
 func (api *API) Search(collectionName string, includeBase bool, keywords []string) (winners []Image, err error) {
 	// Pull down records server-side and search through them:
-	imgs, err := api.GetList(collectionName, includeBase, ImagesOrderByIDASC)
+	imgs, err := api.GetList(collectionName, includeBase, ImagesOrderByTitleASC)
 	if err != nil {
 		return nil, err
 	}
