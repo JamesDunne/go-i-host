@@ -5,15 +5,14 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"path/filepath"
-	"strings"
-	//"log"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 import "github.com/JamesDunne/go-util/web"
@@ -860,7 +859,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return apiListResult(rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
 		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
-		keywords := strings.Split(strings.Join(req_query["q"], " "), " ")
+		q := strings.Join(req_query["q"], " ")
+		keywords := []string{}
+		if q != "" {
+			keywords = strings.Split(strings.Join(req_query["q"], " "), " ")
+		}
 		list, werr := search(collectionName, true, keywords)
 		return apiListResult(rsp, list, werr)
 	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
