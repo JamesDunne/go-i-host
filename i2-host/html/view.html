@@ -35,22 +35,44 @@ body {
 #container {
   display: inline-block;
 }
+#admin label {
+	display: inline-block;
+	width: 6em;
+	text-align: left;
+}
+#admin input[type=text] {
+	width: 40em;
+}
 </style>
 </head>
 <body onresize="resize()">
-<div id="container" data-id="{{.ID}}">
+	<div id="container" data-id="{{.ID}}">
 {{if (eq .Kind "youtube")}}
-    <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}{{with (index $.Query "t")}}&start={{.}}{{end}}" frameborder="0" allowfullscreen></iframe>
+    	<iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}{{with (index $.Query "t")}}&start={{.}}{{end}}" frameborder="0" allowfullscreen></iframe>
 {{else if (eq .Kind "imgur-gifv")}}
-	<video id="imain" src="{{.ImageURL}}" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline></video>
+		<video id="imain" src="{{.ImageURL}}" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline></video>
 {{else}}
-    <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
+    	<img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}
 {{if not (eq .Kind "imgur-gifv")}}
-    <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
+    	<img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 {{end}}
-</div>
-<script>
+	</div>
+{{if $.IsAdmin}}
+	<div id="admin"><br/>
+		<form action="/admin/update/{{.Base62ID}}" method="POST">
+			<label for="title">Title:</label><input type="text" id="title" name="title" value="{{.Title}}" /><br/>
+			<label for="keywords">Keywords:</label><input type="text" id="keywords" name="keywords" value="{{.Keywords}}" /><br/>
+			<label for="collection">Collection:</label><input type="text" id="collection" name="collection" value="{{.CollectionName}}" /><br/>
+			<label for="submitter">Submitter:</label><input type="text" id="submitter" name="submitter" value="{{.Submitter}}" /><br/>
+			<input type="checkbox" id="nsfw" name="nsfw"{{if not .IsClean}} checked="checked"{{end}} /><label for="nsfw">NSFW</label><br/>
+			<br/>
+			<input type="submit" value="Update" />&nbsp;
+			<input type="reset" value="Reset" />
+		</form>
+	</div>
+{{end}}
+<script type="text/javascript">
 {{if (eq .Kind "youtube")}}
     var iw = 560, ih = 315;
 {{else}}

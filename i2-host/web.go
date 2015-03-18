@@ -346,6 +346,7 @@ type viewTemplateModel struct {
 	FillScreen bool
 	Query      map[string]string
 	Image      ImageViewModel
+	IsAdmin    bool
 }
 
 func flattenQuery(query map[string][]string) (flat map[string]string) {
@@ -405,7 +406,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 			// Redirect to a black-background view of the image:
 			redir_url := path.Join("/b/", b62.Encode(id+10000))
-			http.Redirect(rsp, req, redir_url, 302)
+			http.Redirect(rsp, req, redir_url, http.StatusFound)
 			return nil
 		} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/upload"); ok {
 			// Upload a new image:
@@ -473,7 +474,43 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 			// Redirect to a black-background view of the image:
 			redir_url := path.Join("/b/", b62.Encode(id+10000))
-			http.Redirect(rsp, req, redir_url, 302)
+			http.Redirect(rsp, req, redir_url, http.StatusFound)
+			return nil
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/update"); ok {
+			id := b62.Decode(id_s) - 10000
+
+			var img *Image
+			if werr := useAPI(func(api *API) *web.Error {
+				var err error
+				img, err = api.GetImage(id)
+				return web.AsError(err, http.StatusInternalServerError)
+			}); werr != nil {
+				return werr.AsHTML()
+			}
+			if img == nil {
+				return web.AsError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).AsHTML()
+			}
+
+			img.Title = req.FormValue("title")
+			img.Keywords = req.FormValue("keywords")
+			img.CollectionName = req.FormValue("collection")
+			img.Submitter = req.FormValue("submitter")
+			img.IsClean = (req.FormValue("nsfw") == "")
+
+			// Generate keywords from title:
+			if img.Keywords == "" {
+				img.Keywords = titleToKeywords(img.Title)
+			}
+
+			// Process the update request:
+			if werr := useAPI(func(api *API) *web.Error {
+				return web.AsError(api.Update(img), http.StatusInternalServerError)
+			}); werr != nil {
+				return werr.AsHTML()
+			}
+
+			// Redirect back to edit page:
+			http.Redirect(rsp, req, "/admin/edit/"+id_s, http.StatusFound)
 			return nil
 		} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/add"); ok {
 			// Add a new image via URL to download from via JSON API:
@@ -704,6 +741,57 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 		rsp.WriteHeader(200)
 		if werr := web.AsError(uiTmpl.ExecuteTemplate(rsp, "new", model), http.StatusInternalServerError); werr != nil {
+			return werr.AsHTML()
+		}
+		return nil
+	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/list"); ok {
+		list, werr := getList(collectionName, true, orderBy)
+		if werr != nil {
+			return werr.AsHTML()
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel
+		}{
+			List: projectModelList(list),
+		}
+
+		// GET the /admin/list to link to edit pages:
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if werr := web.AsError(uiTmpl.ExecuteTemplate(rsp, "admin", model), http.StatusInternalServerError); werr != nil {
+			return werr.AsHTML()
+		}
+		return nil
+	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/edit"); ok {
+		id := b62.Decode(id_s) - 10000
+
+		var img *Image
+		if werr := useAPI(func(api *API) *web.Error {
+			var err error
+			img, err = api.GetImage(id)
+			return web.AsError(err, http.StatusInternalServerError)
+		}); werr != nil {
+			return werr.AsJSON()
+		}
+		if img == nil {
+			return web.AsError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).AsJSON()
+		}
+
+		// Project into a view model:
+		model := viewTemplateModel{
+			BGColor: "gray",
+			Query:   flattenQuery(req_query),
+			Image:   *xlatImageViewModel(img, nil),
+			// Allow editing:
+			IsAdmin: true,
+		}
+
+		// GET the /admin/list to link to edit pages:
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if werr := web.AsError(uiTmpl.ExecuteTemplate(rsp, "view", model), http.StatusInternalServerError); werr != nil {
 			return werr.AsHTML()
 		}
 		return nil
