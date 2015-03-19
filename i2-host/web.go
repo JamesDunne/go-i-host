@@ -143,7 +143,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 			CollectionName: req.CollectionName,
 			Submitter:      req.Submitter,
 			IsClean:        req.IsClean,
-			Keywords:       req.Keywords,
+			Keywords:       strings.ToLower(req.Keywords),
 		}
 
 		// Generate keywords from title:
@@ -385,6 +385,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				Submitter:      req.RemoteAddr,
 				Title:          req.FormValue("title"),
 				SourceURL:      imgurl_s,
+				Keywords:       strings.ToLower(req.FormValue("keywords")),
 			}
 
 			// Require the 'title' form value:
@@ -430,6 +431,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				if err == io.EOF {
 					break
 				}
+
+				// Parse normal form values:
 				if part.FormName() == "title" {
 					// TODO: parse content-length if it exists?
 					//part.Header.Get("Content-Length")
@@ -440,7 +443,16 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 					}
 					store.Title = string(t[:n])
 					continue
+				} else if part.FormName() == "keywords" {
+					t := make([]byte, 200)
+					n, err := part.Read(t)
+					if werr := web.AsError(err, http.StatusInternalServerError); werr != nil {
+						return werr.AsHTML()
+					}
+					store.Keywords = strings.ToLower(string(t[:n]))
+					continue
 				}
+
 				if part.FileName() == "" {
 					continue
 				}
@@ -491,7 +503,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			}
 
 			img.Title = req.FormValue("title")
-			img.Keywords = req.FormValue("keywords")
+			img.Keywords = strings.ToLower(req.FormValue("keywords"))
 			img.CollectionName = req.FormValue("collection")
 			img.Submitter = req.FormValue("submitter")
 			img.IsClean = (req.FormValue("nsfw") == "")
@@ -563,6 +575,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			// Generate keywords from title:
 			if img.Keywords == "" {
 				img.Keywords = titleToKeywords(img.Title)
+			} else {
+				img.Keywords = strings.ToLower(img.Keywords)
 			}
 
 			// Process the update request:
@@ -1037,5 +1051,32 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		http.ServeFile(rsp, req, local_path)
 		runtime.GC()
 		return nil
+	}
+}
+
+// Unused. For upgrade purposes.
+// Set all Keywords for images:
+func UpdateKeywords() {
+	api, err := NewAPI()
+	if err != nil {
+		panic(err)
+	}
+	defer api.Close()
+
+	imgs, err := api.GetAll(ImagesOrderByIDASC)
+	for _, img := range imgs {
+		if img.Keywords != "" {
+			continue
+		}
+
+		keywords := splitToWords(strings.ToLower(img.Title))
+		//log.Printf("%+v\n", keywords)
+
+		img.Keywords = strings.Join(keywords, " ")
+
+		err = api.Update(&img)
+		if err != nil {
+			//log.Println(err)
+		}
 	}
 }
