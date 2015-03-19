@@ -834,6 +834,26 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			return werr.AsHTML()
 		}
 		return nil
+	} else if web.MatchExactRoute(req.URL.Path, "/admin") {
+		list, werr := getList("all", true, orderBy)
+		if werr != nil {
+			return werr.AsHTML()
+		}
+
+		// Project into a view model:
+		model := struct {
+			List []ImageViewModel
+		}{
+			List: projectModelList(list),
+		}
+
+		// GET the /admin/list to link to edit pages:
+		rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rsp.WriteHeader(200)
+		if werr := web.AsError(uiTmpl.ExecuteTemplate(rsp, "admin", model), http.StatusInternalServerError); werr != nil {
+			return werr.AsHTML()
+		}
+		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/list"); ok {
 		list, werr := getList(collectionName, true, orderBy)
 		if werr != nil {
