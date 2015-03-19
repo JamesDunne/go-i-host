@@ -765,6 +765,20 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 		listCollection(rsp, req, collectionName, list, showUnclean)
 		return nil
+	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/search"); ok {
+		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
+		q := strings.Join(req_query["q"], " ")
+		keywords := []string{}
+		if q != "" {
+			keywords = strings.Split(strings.Join(req_query["q"], " "), " ")
+		}
+		list, werr := search(collectionName, true, keywords)
+		if werr != nil {
+			return werr.AsHTML()
+		}
+
+		listCollection(rsp, req, collectionName, list, showUnclean)
+		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/add"); ok {
 		model := &struct {
 			AddURL    string
