@@ -834,7 +834,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			return werr.AsHTML()
 		}
 		return nil
-	} else if web.MatchExactRoute(req.URL.Path, "/admin") {
+	} else if web.MatchExactRouteIgnoreSlash(req.URL.Path, "/admin") {
 		list, werr := getList("all", true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
