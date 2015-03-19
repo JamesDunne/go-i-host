@@ -991,6 +991,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			ID             int64   `json:"id"`
 			Base62ID       string  `json:"base62id"`
 			Title          string  `json:"title"`
+			Keywords       string  `json:"keywords"`
 			CollectionName string  `json:"collectionName,omitempty"`
 			Submitter      string  `json:"submitter,omitempty"`
 			Kind           string  `json:"kind"`
@@ -1003,6 +1004,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			Base62ID:       b62.Encode(id + 10000),
 			Kind:           img.Kind,
 			Title:          img.Title,
+			Keywords:       img.Keywords,
 			CollectionName: img.CollectionName,
 			Submitter:      img.Submitter,
 			SourceURL:      img.SourceURL,
