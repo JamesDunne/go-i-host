@@ -503,6 +503,20 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/update"); ok {
 			id := b62.Decode(id_s) - 10000
 
+			if req.FormValue("delete") != "" {
+				if werr := useAPI(func(api *API) *web.Error {
+					var err error
+					err = api.Delete(id)
+					return web.AsError(err, http.StatusInternalServerError)
+				}); werr != nil {
+					return werr.AsHTML()
+				}
+
+				// Redirect back to edit page:
+				http.Redirect(rsp, req, "/admin/edit/"+id_s, http.StatusFound)
+				return nil
+			}
+
 			var img *Image
 			if werr := useAPI(func(api *API) *web.Error {
 				var err error
@@ -799,10 +813,10 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			img, err = api.GetImage(id)
 			return web.AsError(err, http.StatusInternalServerError)
 		}); werr != nil {
-			return werr.AsJSON()
+			return werr.AsHTML()
 		}
 		if img == nil {
-			return web.AsError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).AsJSON()
+			return web.AsError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).AsHTML()
 		}
 
 		// Project into a view model:
