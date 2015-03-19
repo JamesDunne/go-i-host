@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -380,12 +382,16 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				return web.AsError(fmt.Errorf("Missing required 'url' form value!"), http.StatusBadRequest).AsHTML()
 			}
 
+			log.Printf("nsfw='%s'\n", req.FormValue("nsfw"))
+			nsfw := req.FormValue("nsfw") == "1"
+
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
 				Submitter:      req.RemoteAddr,
 				Title:          req.FormValue("title"),
 				SourceURL:      imgurl_s,
 				Keywords:       strings.ToLower(req.FormValue("keywords")),
+				IsClean:        !nsfw,
 			}
 
 			// Require the 'title' form value:
@@ -436,20 +442,27 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				if part.FormName() == "title" {
 					// TODO: parse content-length if it exists?
 					//part.Header.Get("Content-Length")
-					t := make([]byte, 200)
-					n, err := part.Read(t)
+
+					t, err := ioutil.ReadAll(part)
 					if werr := web.AsError(err, http.StatusInternalServerError); werr != nil {
 						return werr.AsHTML()
 					}
-					store.Title = string(t[:n])
+					store.Title = string(t)
 					continue
 				} else if part.FormName() == "keywords" {
-					t := make([]byte, 200)
-					n, err := part.Read(t)
+					t, err := ioutil.ReadAll(part)
 					if werr := web.AsError(err, http.StatusInternalServerError); werr != nil {
 						return werr.AsHTML()
 					}
-					store.Keywords = strings.ToLower(string(t[:n]))
+					store.Keywords = strings.ToLower(string(t))
+					continue
+				} else if part.FormName() == "nsfw" {
+					t, err := ioutil.ReadAll(part)
+					if werr := web.AsError(err, http.StatusInternalServerError); werr != nil {
+						return werr.AsHTML()
+					}
+					nsfw := (string(t) == "1")
+					store.IsClean = !nsfw
 					continue
 				}
 
