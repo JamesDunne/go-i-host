@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/gob"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -326,10 +329,23 @@ func search(collectionName string, includeBase bool, keywords []string) (list []
 	return
 }
 
-func apiListResult(rsp http.ResponseWriter, list []Image, werr *web.Error) *web.Error {
+func apiListResult(req *http.Request, rsp http.ResponseWriter, list []Image, werr *web.Error) *web.Error {
 	if werr != nil {
 		return werr.AsJSON()
 	}
+
+	// Calculate ETag of list as hex(SHA256(gob(list))):
+	sha := sha256.New()
+	gob.NewEncoder(sha).Encode(list)
+	etag := "\"" + hex.EncodeToString(sha.Sum(nil)) + "\""
+
+	if check_etag := req.Header.Get("If-None-Match"); check_etag == etag {
+		// 304 Not Modified:
+		rsp.WriteHeader(http.StatusNotModified)
+		return nil
+	}
+
+	rsp.Header().Set("ETag", etag)
 
 	// Project into a view model:
 	model := struct {
@@ -908,10 +924,10 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/list"); ok {
 		// `/api/v1/list/all` returns all images across all collections.
 		list, werr := getList(collectionName, true, orderBy)
-		return apiListResult(rsp, list, werr)
+		return apiListResult(req, rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/only"); ok {
 		list, werr := getList(collectionName, false, orderBy)
-		return apiListResult(rsp, list, werr)
+		return apiListResult(req, rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
 		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
 		q := strings.Join(req_query["q"], " ")
@@ -920,7 +936,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			keywords = strings.Split(strings.Join(req_query["q"], " "), " ")
 		}
 		list, werr := search(collectionName, true, keywords)
-		return apiListResult(rsp, list, werr)
+		return apiListResult(req, rsp, list, werr)
 	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
 		id := b62.Decode(id_s) - 10000
 
