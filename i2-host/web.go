@@ -271,6 +271,22 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 }
 
 func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName string, list []Image, showUnclean bool) {
+	cached, werr := doCaching(req, rsp, struct {
+		CollectionName string
+		List           []Image
+		ShowUnclean    bool
+	}{
+		CollectionName: collectionName,
+		List:           list,
+		ShowUnclean:    showUnclean,
+	})
+	if werr != nil {
+		return
+	}
+	if cached {
+		return
+	}
+
 	// Project into a view model:
 	model := struct {
 		List []ImageViewModel
@@ -329,23 +345,38 @@ func search(collectionName string, includeBase bool, keywords []string) (list []
 	return
 }
 
-func apiListResult(req *http.Request, rsp http.ResponseWriter, list []Image, werr *web.Error) *web.Error {
-	if werr != nil {
-		return werr.AsJSON()
+func doCaching(req *http.Request, rsp http.ResponseWriter, data interface{}) (bool, *web.Error) {
+	// Calculate ETag of data as hex(SHA256(gob(data))):
+	sha := sha256.New()
+	err := gob.NewEncoder(sha).Encode(data)
+	if err != nil {
+		return false, web.AsError(err, http.StatusInternalServerError)
 	}
 
-	// Calculate ETag of list as hex(SHA256(gob(list))):
-	sha := sha256.New()
-	gob.NewEncoder(sha).Encode(list)
 	etag := "\"" + hex.EncodeToString(sha.Sum(nil)) + "\""
 
 	if check_etag := req.Header.Get("If-None-Match"); check_etag == etag {
 		// 304 Not Modified:
 		rsp.WriteHeader(http.StatusNotModified)
-		return nil
+		return true, nil
 	}
 
 	rsp.Header().Set("ETag", etag)
+	return false, nil
+}
+
+func apiListResult(req *http.Request, rsp http.ResponseWriter, list []Image, werr *web.Error) *web.Error {
+	if werr != nil {
+		return werr.AsJSON()
+	}
+
+	cached, werr := doCaching(req, rsp, list)
+	if werr != nil {
+		return werr.AsJSON()
+	}
+	if cached {
+		return nil
+	}
 
 	// Project into a view model:
 	model := struct {
