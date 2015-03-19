@@ -26,6 +26,16 @@ func titleToKeywords(title string) string {
 	return strings.Join(splitToWords(strings.ToLower(title)), " ")
 }
 
+// Make sure all keywords are individual list elements, e.g. []string{"a b"} -> []string{"a","b"}:
+func normalizeKeywords(words []string) []string {
+	q := strings.Join(words, " ")
+	keywords := []string{}
+	if q != "" {
+		keywords = strings.Split(q, " ")
+	}
+	return keywords
+}
+
 type API struct {
 	db *sqlx.DB
 }
@@ -313,22 +323,6 @@ func (orderBy ImagesOrderBy) ToSQL() string {
 	return ob
 }
 
-func (api *API) GetAll(orderBy ImagesOrderBy) (imgs []Image, err error) {
-	ob := orderBy.ToSQL()
-
-	recs := make([]dbImage, 0, 200)
-	err = api.db.Select(&recs, `select ID, `+nonIDColumns+` from Image `+ob)
-	if err != nil {
-		return
-	}
-
-	imgs = make([]Image, len(recs))
-	for i, _ := range recs {
-		mapRecToModel(&recs[i], &imgs[i])
-	}
-	return
-}
-
 func (api *API) GetList(collectionName string, includeBase bool, orderBy ImagesOrderBy) (imgs []Image, err error) {
 	ob := orderBy.ToSQL()
 
@@ -424,9 +418,9 @@ func keywordMatch(keywords []string, list []Image) (winners []Image) {
 	return
 }
 
-func (api *API) Search(collectionName string, includeBase bool, keywords []string) (winners []Image, err error) {
+func (api *API) Search(keywords []string, collectionName string, includeBase bool, orderBy ImagesOrderBy) (winners []Image, err error) {
 	// Pull down records server-side and search through them:
-	imgs, err := api.GetList(collectionName, includeBase, ImagesOrderByTitleASC)
+	imgs, err := api.GetList(collectionName, includeBase, orderBy)
 	if err != nil {
 		return nil, err
 	}

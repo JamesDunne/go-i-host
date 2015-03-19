@@ -1,4 +1,4 @@
-{{define "clean"}}<!DOCTYPE html>
+{{define "list"}}<!DOCTYPE html>
 
 <html>
 <head>
@@ -31,12 +31,19 @@ body {
 
   width:100%;
 }
+h1,h2 { margin: 0; }
+#main {
+  margin-top: 1em;
+}
 div.i {
   display: inline-block;
   margin: 2px 4px;
-  border: 2px solid #444442;
+  border: 3px solid #444442;
   overflow: hidden;
   text-align: left;
+}
+div.i[data-nsfw] {
+  border: 3px solid #aa0000 !important;
 }
 div.i div.container {
   width: 100%;
@@ -79,10 +86,15 @@ div.i div.title {
 </head>
 <body>
     <h2>There's a GIF for everything</h2>
+    <form method="GET" action="">
+        <input type="text" name="q" value="{{$.Keywords}}" size="100" placeholder="Search by keywords..." />
+        <input type="checkbox" name="nsfw" value="1"{{if $.ShowUnclean}} checked="checked"{{end}} /><label>NSFW</label>
+        <input type="submit" value="Search"/>
+    </form>
     <div id="main">
-        {{range .List}}
-        {{if .IsClean}}
-        <div class="i" data-id="{{.ID}}">
+        {{range $.List}}
+        {{if (or ($.ShowUnclean) .IsClean)}}
+        <div class="i" data-id="{{.ID}}"{{if not .IsClean}} data-nsfw="true"{{end}}>
             <div class="container">
                 <div class="thumb">
                     <a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
@@ -91,104 +103,6 @@ div.i div.title {
             </div>
         </div>
         {{end}}
-        {{end}}
-    </div>
-</body>
-</html>
-{{end}}{{define "unclean"}}<!DOCTYPE html>
-
-<html>
-<head>
-    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta property="og:url" content="http://i.bittwiddlers.org/?all">
-    <meta property="og:type" content="website"/>
-    <meta property="og:site_name" content="i.bittwiddlers.org"/>
-    <meta property="og:title" content="My Private Meme Collection"/>
-    <meta property="og:description" content="A random collection of funny memes and animated GIFs I keep around for quick access."/>
-    <meta property="og:image" content="http://i.bittwiddlers.org/t/KH3.png">
-    <title>Private Listing</title>
-
-<style type="text/css">
-html, body {
-  width: 100%;
-  height: 100%;
-}
-html {
-  display: table;
-}
-body {
-  background-color: black;
-  color: silver;
-  font-family: Arial,sans-serif;
-  font-size: 100%;
-
-  display: table-cell;
-  vertical-align: middle;
-  text-align: center;
-
-  width:100%;
-}
-div.i {
-  display: inline-block;
-  margin: 2px 4px;
-  border: 2px solid #444442;
-  overflow: hidden;
-  text-align: left;
-}
-div.i[data-dirty] {
-  border: 2px solid #aa0000 !important;
-}
-div.i div.container {
-  width: 100%;
-}
-div.i div.thumb {
-  margin: 0px;
-  padding: 0px;
-  display: table-cell;
-  vertical-align: middle;
-}
-div.i div.thumb a {
-  line-height: 0;
-}
-div.i div.thumb a img {
-  width: 100%;
-}
-div.i div.title {
-  margin: 0px;
-  font-size: 14px;
-  height: 18px;
-  white-space: nowrap;
-}
-@media (min-resolution: 1dppx) and (max-resolution: 1.999dppx) {
-  div.i { width: 200px; height: 224px; }
-  div.i div.title { width: 200px; }
-  div.i div.thumb {
-    width: 200px;
-    height: 200px;
-  }
-}
-@media (min-resolution: 2dppx) {
-  div.i { width: 100px; height: 124px; }
-  div.i div.title { width: 100px; }
-  div.i div.thumb {
-    width: 100px;
-    height: 100px;
-  }
-}
-</style>
-</head>
-<body>
-    <h2>There's a GIF for everything</h2>
-    <div id="main">
-        {{range .List}}
-        <div class="i" data-id="{{.ID}}"{{if not .IsClean}} data-dirty="true"{{end}}>
-            <div class="container">
-                <div class="thumb">
-                    <a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
-                </div>
-                <div class="title">{{.Title}}</div>
-            </div>
-        </div>
         {{end}}
     </div>
 </body>

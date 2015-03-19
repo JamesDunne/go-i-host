@@ -270,7 +270,7 @@ func getForm(rsp http.ResponseWriter, req *http.Request) {
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 }
 
-func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName string, list []Image, showUnclean bool) {
+func listCollection(rsp http.ResponseWriter, req *http.Request, keywords []string, collectionName string, list []Image, nsfw bool) {
 	cached, werr := doCaching(req, rsp, struct {
 		CollectionName string
 		List           []Image
@@ -278,7 +278,7 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 	}{
 		CollectionName: collectionName,
 		List:           list,
-		ShowUnclean:    showUnclean,
+		ShowUnclean:    nsfw,
 	})
 	if werr != nil {
 		return
@@ -289,21 +289,18 @@ func listCollection(rsp http.ResponseWriter, req *http.Request, collectionName s
 
 	// Project into a view model:
 	model := struct {
-		List []ImageViewModel
+		List        []ImageViewModel
+		ShowUnclean bool
+		Keywords    string
 	}{
-		List: projectModelList(list),
-	}
-
-	var viewName string
-	if showUnclean {
-		viewName = "unclean"
-	} else {
-		viewName = "clean"
+		List:        projectModelList(list),
+		ShowUnclean: nsfw,
+		Keywords:    strings.Join(keywords, " "),
 	}
 
 	rsp.Header().Set("Content-Type", "text/html; charset=utf-8")
 	rsp.WriteHeader(200)
-	if web.AsError(uiTmpl.ExecuteTemplate(rsp, viewName, model), http.StatusInternalServerError).AsHTML().Respond(rsp) {
+	if web.AsError(uiTmpl.ExecuteTemplate(rsp, "list", model), http.StatusInternalServerError).AsHTML().Respond(rsp) {
 		return
 	}
 	return
@@ -333,11 +330,11 @@ func getList(collectionName string, includeBase bool, orderBy ImagesOrderBy) (li
 	return
 }
 
-func search(collectionName string, includeBase bool, keywords []string) (list []Image, werr *web.Error) {
+func apiSearch(keywords []string, collectionName string, includeBase bool, orderBy ImagesOrderBy) (list []Image, werr *web.Error) {
 	werr = useAPI(func(api *API) *web.Error {
 		var err error
 
-		list, err = api.Search(collectionName, includeBase, keywords)
+		list, err = api.Search(keywords, collectionName, includeBase, orderBy)
 
 		return web.AsError(err, http.StatusInternalServerError)
 	})
@@ -774,7 +771,11 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 	// GET:
 	req_query := req.URL.Query()
-	_, showUnclean := req_query["all"]
+	nsfw := false
+	nsfw_s := req_query.Get("nsfw")
+	if nsfw_s != "" {
+		nsfw = true
+	}
 
 	var orderBy ImagesOrderBy
 	if _, ok := req_query["title"]; ok {
@@ -788,43 +789,31 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	if req.URL.Path == "/favicon.ico" {
 		return web.NewError(nil, http.StatusNoContent, web.Empty)
 	} else if req.URL.Path == "/" {
-		// Render a list page:
-		list, werr := getList("all", false, orderBy)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, "all", true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
 
-		listCollection(rsp, req, "", list, showUnclean)
+		listCollection(rsp, req, keywords, "", list, nsfw)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/list"); ok {
-		list, werr := getList(collectionName, true, orderBy)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, collectionName, true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
 
-		listCollection(rsp, req, collectionName, list, showUnclean)
+		listCollection(rsp, req, keywords, collectionName, list, nsfw)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/only"); ok {
-		list, werr := getList(collectionName, false, orderBy)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, collectionName, false, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
 
-		listCollection(rsp, req, collectionName, list, showUnclean)
-		return nil
-	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/search"); ok {
-		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
-		q := strings.Join(req_query["q"], " ")
-		keywords := []string{}
-		if q != "" {
-			keywords = strings.Split(strings.Join(req_query["q"], " "), " ")
-		}
-		list, werr := search(collectionName, true, keywords)
-		if werr != nil {
-			return werr.AsHTML()
-		}
-
-		listCollection(rsp, req, collectionName, list, showUnclean)
+		listCollection(rsp, req, keywords, collectionName, list, nsfw)
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/add"); ok {
 		model := &struct {
@@ -961,12 +950,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return apiListResult(req, rsp, list, werr)
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/search"); ok {
 		// Join and resplit keywords by spaces because `req_query["q"]` splits at `q=1&q=2&q=3` level, not spaces.
-		q := strings.Join(req_query["q"], " ")
-		keywords := []string{}
-		if q != "" {
-			keywords = strings.Split(strings.Join(req_query["q"], " "), " ")
-		}
-		list, werr := search(collectionName, true, keywords)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, collectionName, true, orderBy)
 		return apiListResult(req, rsp, list, werr)
 	} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/api/v1/info"); ok {
 		id := b62.Decode(id_s) - 10000
@@ -1153,7 +1138,7 @@ func UpdateKeywords() {
 	}
 	defer api.Close()
 
-	imgs, err := api.GetAll(ImagesOrderByIDASC)
+	imgs, err := api.GetList("all", true, ImagesOrderByIDASC)
 	for _, img := range imgs {
 		if img.Keywords != "" {
 			continue
