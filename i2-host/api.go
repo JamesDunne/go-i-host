@@ -28,7 +28,7 @@ func titleToKeywords(title string) string {
 
 // Make sure all keywords are individual list elements, e.g. []string{"a b"} -> []string{"a","b"}:
 func normalizeKeywords(words []string) []string {
-	q := strings.Join(words, " ")
+	q := strings.ToLower(strings.Join(words, " "))
 	keywords := []string{}
 	if q != "" {
 		keywords = strings.Split(q, " ")
