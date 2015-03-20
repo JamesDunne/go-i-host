@@ -29,9 +29,17 @@ func titleToKeywords(title string) string {
 // Make sure all keywords are individual list elements, e.g. []string{"a b"} -> []string{"a","b"}:
 func normalizeKeywords(words []string) []string {
 	q := strings.ToLower(strings.Join(words, " "))
-	keywords := []string{}
+	words = []string{}
 	if q != "" {
-		keywords = strings.Split(q, " ")
+		words = strings.Split(q, " ")
+	}
+	// Remove empty strings:
+	keywords := make([]string, 0, len(words))
+	for _, word := range words {
+		if word == "" {
+			continue
+		}
+		keywords = append(keywords, word)
 	}
 	return keywords
 }
