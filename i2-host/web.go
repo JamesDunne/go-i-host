@@ -1148,30 +1148,3 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return nil
 	}
 }
-
-// Unused. For upgrade purposes.
-// Set all Keywords for images:
-func UpdateKeywords() {
-	api, err := NewAPI()
-	if err != nil {
-		panic(err)
-	}
-	defer api.Close()
-
-	imgs, err := api.GetList("all", true, ImagesOrderByIDASC)
-	for _, img := range imgs {
-		if img.Keywords != "" {
-			continue
-		}
-
-		keywords := splitToWords(strings.ToLower(img.Title))
-		//log.Printf("%+v\n", keywords)
-
-		img.Keywords = strings.Join(keywords, " ")
-
-		err = api.Update(&img)
-		if err != nil {
-			//log.Println(err)
-		}
-	}
-}

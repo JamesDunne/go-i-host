@@ -23,7 +23,7 @@ func splitToWords(text string) []string {
 }
 
 func titleToKeywords(title string) string {
-	return strings.Join(splitToWords(strings.ToLower(title)), " ")
+	return strings.Join(normalizeKeywords(splitToWords(strings.ToLower(title))), " ")
 }
 
 // Make sure all keywords are individual list elements, e.g. []string{"a b"} -> []string{"a","b"}:
