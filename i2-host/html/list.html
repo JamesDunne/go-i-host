@@ -2,7 +2,7 @@
 
 <html>
 <head>
-    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.25">
     <meta property="og:url" content="http://i.bittwiddlers.org/">
     <meta property="og:type" content="website"/>
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
@@ -63,11 +63,21 @@ div.i div.thumb a img {
 div.i div.title {
   margin: 0px;
   font-size: 14px;
-  height: 18px;
   white-space: nowrap;
+  overflow: hidden;
+}
+div.i div.keywords {
+  color: darkgreen;
+  margin: 0px;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#q {
+  width: 30em;
 }
 @media (min-resolution: 1dppx) and (max-resolution: 1.999dppx) {
-  div.i { width: 200px; height: 224px; }
+  div.i { width: 200px; height: 238px; }
   div.i div.title { width: 200px; }
   div.i div.thumb {
     width: 200px;
@@ -75,7 +85,7 @@ div.i div.title {
   }
 }
 @media (min-resolution: 2dppx) {
-  div.i { width: 100px; height: 124px; }
+  div.i { width: 100px; height: 138px; }
   div.i div.title { width: 100px; }
   div.i div.thumb {
     width: 100px;
@@ -87,23 +97,22 @@ div.i div.title {
 <body>
     <h2>There's a GIF for everything</h2>
     <form method="GET" action="">
-        <input type="text" name="q" value="{{$.Keywords}}" size="100" placeholder="Search by keywords..." />
-        <input type="checkbox" name="nsfw" value="1"{{if $.ShowUnclean}} checked="checked"{{end}} /><label>NSFW</label>
+        <input type="text" title="Search by keywords" id="q" name="q" value="{{$.Keywords}}" placeholder="Search by keywords..." />
+        <input type="checkbox" title="Include NSFW images" id="nsfw" name="nsfw" value="1"{{if $.ShowUnclean}} checked="checked"{{end}} /><label for="nsfw">NSFW</label>
         <input type="submit" value="Search"/>
     </form>
     <div id="main">
-        {{range $.List}}
-        {{if (or ($.ShowUnclean) .IsClean)}}
+{{range $.List}}{{if (or ($.ShowUnclean) .IsClean)}}
         <div class="i" data-id="{{.ID}}"{{if not .IsClean}} data-nsfw="true"{{end}}>
             <div class="container">
                 <div class="thumb">
                     <a href="/b/{{.Base62ID}}"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
                 </div>
                 <div class="title">{{.Title}}</div>
+                <div class="keywords">{{.Keywords}}</div>
             </div>
         </div>
-        {{end}}
-        {{end}}
+{{end}}{{end}}
     </div>
 </body>
 </html>
