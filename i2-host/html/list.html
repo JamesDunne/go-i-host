@@ -97,7 +97,7 @@ div.i div.keywords {
 <body>
     <h2>There's a GIF for everything</h2>
     <form method="GET" action="">
-        <input type="text" title="Search by keywords" id="q" name="q" value="{{$.Keywords}}" placeholder="Search by keywords..." />
+        <input type="text" autofocus="autofocus" title="Search by keywords" id="q" name="q" value="{{$.Keywords}}" placeholder="Search by keywords..." />
         <input type="checkbox" title="Include NSFW images" id="nsfw" name="nsfw" value="1"{{if $.ShowUnclean}} checked="checked"{{end}} /><label for="nsfw">NSFW</label>
         <input type="submit" value="Search"/>
     </form>
