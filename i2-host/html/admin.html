@@ -31,6 +31,13 @@ body {
 
   width:100%;
 }
+h1,h2 { margin: 0; }
+#main {
+  margin-top: 1em;
+}
+#q {
+  width: 20em;
+}
 div.i {
   display: inline-block;
   margin: 2px 4px;
@@ -38,8 +45,8 @@ div.i {
   overflow: hidden;
   text-align: left;
 }
-div.i[data-dirty] {
-  border: 3px solid #dd0000 !important;
+div.i[data-nsfw] {
+  border: 3px solid #aa0000 !important;
 }
 div.i div.container {
   width: 100%;
@@ -59,35 +66,40 @@ div.i div.thumb a img {
 div.i div.title {
   margin: 0px;
   font-size: 14px;
-  height: 18px;
   white-space: nowrap;
+  overflow: hidden;
 }
-div.i div.title input {
+div.i div.keywords {
+  color: darkgreen;
   margin: 0px;
   font-size: 14px;
-  height: 18px;
   white-space: nowrap;
+  overflow: hidden;
 }
 @media (min-resolution: 1dppx) and (max-resolution: 1.999dppx) {
-	div.i { width: 200px; height: 248px; }
-	div.i div.title { width: 200px; }
-	div.i div.thumb {
-		width: 200px;
-		height: 200px;
-	}
+  div.i { width: 200px; height: 238px; }
+  div.i div.title { width: 200px; }
+  div.i div.thumb {
+    width: 200px;
+    height: 200px;
+  }
 }
 @media (min-resolution: 2dppx) {
-	div.i { width: 100px; height: 148px; }
-	div.i div.title { width: 100px; }
-	div.i div.thumb {
-		width: 100px;
-		height: 100px;
-	}
+  div.i { width: 100px; height: 138px; }
+  div.i div.title { width: 100px; }
+  div.i div.thumb {
+    width: 100px;
+    height: 100px;
+  }
 }
 </style>
 </head>
 <body>
     <h2>ADMIN</h2>
+    <form method="GET" action="">
+        <input type="text" autofocus="autofocus" title="Search by keywords" id="q" name="q" value="{{$.Keywords}}" placeholder="Search by keywords..." />
+        <input type="submit" value="Search"/>
+    </form>
     <div id="main">
         {{range .List}}
         <div class="i" data-id="{{.ID}}"{{if not .IsClean}} data-dirty="true"{{end}}>
@@ -96,7 +108,7 @@ div.i div.title input {
                     <a href="/admin/edit/{{.Base62ID}}" target="_blank"><img src="{{.ThumbURL}}" alt="{{.Title}}" title="{{.Title}}" /></a>
                 </div>
                 <div class="title">{{.Title}}</div>
-                <div class="title">{{.Keywords}}</div>
+                <div class="keywords">{{.Keywords}}</div>
             </div>
         </div>
         {{end}}

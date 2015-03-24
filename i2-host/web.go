@@ -835,16 +835,19 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		}
 		return nil
 	} else if web.MatchExactRouteIgnoreSlash(req.URL.Path, "/admin") {
-		list, werr := getList("all", true, orderBy)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, "all", true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
 
 		// Project into a view model:
 		model := struct {
-			List []ImageViewModel
+			List     []ImageViewModel
+			Keywords string
 		}{
-			List: projectModelList(list),
+			List:     projectModelList(list),
+			Keywords: strings.Join(keywords, " "),
 		}
 
 		// GET the /admin/list to link to edit pages:
@@ -855,16 +858,19 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		}
 		return nil
 	} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/list"); ok {
-		list, werr := getList(collectionName, true, orderBy)
+		keywords := normalizeKeywords(req_query["q"])
+		list, werr := apiSearch(keywords, collectionName, true, orderBy)
 		if werr != nil {
 			return werr.AsHTML()
 		}
 
 		// Project into a view model:
 		model := struct {
-			List []ImageViewModel
+			List     []ImageViewModel
+			Keywords string
 		}{
-			List: projectModelList(list),
+			List:     projectModelList(list),
+			Keywords: strings.Join(keywords, " "),
 		}
 
 		// GET the /admin/list to link to edit pages:
