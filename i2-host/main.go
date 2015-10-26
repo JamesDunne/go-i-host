@@ -14,6 +14,8 @@ import "github.com/JamesDunne/go-util/base"
 import "github.com/JamesDunne/go-util/web"
 import "github.com/JamesDunne/go-i-host/base62"
 
+import _ "net/http/pprof"
+
 var (
 	base_folder = "."
 	xrGif       = "/p-g/"
@@ -71,6 +73,11 @@ func main() {
 		return
 	}
 	defer cleanup()
+
+	// Start profiler:
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 
 	// Start the server:
 	_, err = base.ServeMain(listen_addr, func(l net.Listener) error {
