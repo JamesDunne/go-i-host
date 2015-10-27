@@ -74,7 +74,10 @@ body {
 {{if (eq .Kind "youtube")}}
         <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}{{with (index $.Query "t")}}&start={{.}}{{end}}" frameborder="0" allowfullscreen></iframe>
 {{else if (eq .Kind "imgur-gifv")}}
-        <video id="imain" src="{{.ImageURL}}" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline></video>
+        <video id="imain" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline>
+            <source src="{{.ImageURL}}.webm" type="video/webm" />
+            <source src="{{.ImageURL}}.mp4" type="video/mp4" />
+        </video>
 {{else}}
         <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}

@@ -80,7 +80,7 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 		break
 	case "imgur-gifv":
 		hash := filename(*i.SourceURL)
-		o.ImageURL = "//i.imgur.com/" + hash + ".mp4"
+		o.ImageURL = "//i.imgur.com/" + hash
 		o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
 		break
 	default:
