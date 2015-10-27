@@ -75,9 +75,42 @@ body {
         <iframe id="imain" onload="loaded(this)" style="display:none" width="560" height="315" src="{{.ImageURL}}?autoplay=1&rel=0&showinfo=0&iv_load_policy=3&controls={{with (index $.Query "controls")}}{{.}}{{else}}0{{end}}{{with (index $.Query "t")}}&start={{.}}{{end}}" frameborder="0" allowfullscreen></iframe>
 {{else if (eq .Kind "imgur-gifv")}}
         <video id="imain" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" muted="muted" loop="loop" webkit-playsinline>
-            <source src="{{.ImageURL}}.webm" type="video/webm" />
-            <source src="{{.ImageURL}}.mp4" type="video/mp4" />
         </video>
+        <script>
+            var vid = document.getElementById("imain"),
+                playFmt = "gif";
+
+            if (window.location.search.indexOf("fmt=gif") >= 0) {
+                // Force what the user wants:
+                playFmt = "gif";
+            } else if (window.location.search.indexOf("fmt=webm") >= 0) {
+                // Force what the user wants:
+                playFmt = "webm";
+            } else if (window.location.search.indexOf("fmt=mp4") >= 0) {
+                // Force what the user wants:
+                playFmt = "mp4";
+            } else if (!!vid.canPlayType) {
+                // Detect what the browser can display:
+                if (vid.canPlayType("video/webm")) {
+                    playFmt = "webm";
+                } else if (vid.canPlayType("video/mp4")) {
+                    playFmt = "mp4";
+                }
+            }
+
+            if (playFmt != "gif") {
+                // Browser can play webm or mp4:
+                var src = document.createElement("source");
+                src.setAttribute("src",  "{{.ImageURL}}." + playFmt);
+                src.setAttribute("type", "video/" + playFmt);
+                vid.appendChild(src);
+            } else {
+                // Browser cannot play webm or mp4; replace the video tag with an img GIF tag instead.
+                var imggif = document.createElement("img");
+                imggif.setAttribute("src", "{{.ImageURL}}.gif");
+                vid.parentNode.replaceChild(imggif, vid);
+            }
+        </script>
 {{else}}
         <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
 {{end}}

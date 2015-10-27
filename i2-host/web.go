@@ -80,6 +80,9 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 		break
 	case "imgur-gifv":
 		hash := filename(*i.SourceURL)
+		if strings.HasPrefix(hash, "/") {
+			hash = hash[1:]
+		}
 		o.ImageURL = "//i.imgur.com/" + hash
 		o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
 		break
@@ -236,7 +239,7 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "i.imgur.com") && (filepath.Ext(imgurl.Path) == ".gifv") {
 		store.Kind = "imgur-gifv"
 		store.LocalPath = ""
-		store.SourceURL = filename(imgurl.Path)
+		store.SourceURL = filename(imgurl.Path[1:])
 		return nil
 	}
 
