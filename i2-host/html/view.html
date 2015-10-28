@@ -80,6 +80,11 @@ body {
             var vid = document.getElementById("imain"),
                 playFmt = "gif";
 
+            vid.addEventListener('loadedmetadata', function(e) {
+                //console.log(vid.videoWidth, vid.videoHeight);
+                loaded(this);
+            });
+
             if (window.location.search.indexOf("fmt=gif") >= 0) {
                 // Force what the user wants:
                 playFmt = "gif";
@@ -104,6 +109,12 @@ body {
                 src.setAttribute("src",  "{{.ImageURL}}." + playFmt);
                 src.setAttribute("type", "video/" + playFmt);
                 vid.appendChild(src);
+                vid.addEventListener('click', function() {
+                    if (vid.paused)
+                        vid.play();
+                    else
+                        vid.pause();
+                },false);
             } else {
                 // Browser cannot play webm or mp4; replace the video tag with an img GIF tag instead.
                 var imggif = document.createElement("img");
@@ -129,7 +140,10 @@ var is_loaded = false;
 
 function loaded(img) {
     is_loaded = true;
-{{if not (eq .Kind "youtube")}}
+{{if (eq .Kind "imgur-gifv")}}
+    iw = img.videoWidth;
+    ih = img.videoHeight;
+{{else if not (eq .Kind "youtube")}}
     // Grab these values on load of img because they may change later on:
     iw = img.width;
     ih = img.height;
@@ -138,7 +152,9 @@ function loaded(img) {
 
     // Hide the loader GIF and show the main image:
     var loader = document.getElementById("loader");
-    loader.style.display = "none";
+    if (loader != void(0)) {
+        loader.style.display = "none";
+    }
 }
 
 function resize() {
@@ -154,6 +170,9 @@ function set_new_size(img) {
     img.style.display = "block";
     img.width = "" + nw;
     img.height = "" + nh;
+{{else if (eq .Kind "imgur-gifv")}}
+    img.width = nw;
+    img.height = nh;
 {{else}}
     img.style.display = "inline";
     img.style.width = "" + nw + "px";
