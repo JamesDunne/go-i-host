@@ -277,9 +277,8 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 		store.Kind = "imgur-gifv"
 		store.SourceURL = filename(imgurl.Path[1:])
 
-		// Background-fetch the GIF, WEBM, and MP4 files:
+		// Background-fetch the WEBM and MP4 files:
 		wg := &sync.WaitGroup{}
-		wg.Add(3)
 		fetch_func := func(ext string, path *string) {
 			defer wg.Done()
 
@@ -293,12 +292,11 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 		}
 
 		var (
-			gif_file  string
 			webm_file string
 			mp4_file  string
 		)
 
-		go fetch_func(".gif", &gif_file)
+		wg.Add(2)
 		go fetch_func(".webm", &webm_file)
 		go fetch_func(".mp4", &mp4_file)
 
@@ -308,9 +306,12 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 			wg.Wait()
 
 			// Move temp files to final storage:
-			moveToStoreFolder(gif_file, id, ".gif")
-			moveToStoreFolder(webm_file, id, ".webm")
-			moveToStoreFolder(mp4_file, id, ".mp4")
+			if werr = moveToStoreFolder(webm_file, id, ".webm"); werr != nil {
+				return
+			}
+			if werr = moveToStoreFolder(mp4_file, id, ".mp4"); werr != nil {
+				return
+			}
 			return nil
 		}
 		return nil
