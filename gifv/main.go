@@ -111,7 +111,7 @@ func main() {
 			fmt.Println(path)
 		}
 
-		go fetch_func(".gif")
+		//go fetch_func(".gif")
 		go fetch_func(".webm")
 		go fetch_func(".mp4")
 
