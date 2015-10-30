@@ -109,7 +109,6 @@ func main() {
 
 		// Background-fetch the GIF, WEBM, and MP4 files:
 		wg := &sync.WaitGroup{}
-		wg.Add(3)
 		fetch_func := func(ext string) {
 			defer wg.Done()
 
@@ -123,6 +122,7 @@ func main() {
 			fmt.Println(path)
 		}
 
+		wg.Add(2)
 		go fetch_func(".webm")
 		go fetch_func(".mp4")
 
