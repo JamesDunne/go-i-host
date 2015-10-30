@@ -24,9 +24,14 @@ func downloadFile(url string, id int64, ext string) (string, error) {
 	// Create a local file to download to:
 	img_name := strconv.FormatInt(id, 10)
 	store_path := path.Join(store_folder(), img_name+ext)
+
+	fmt.Printf("Downloading %s to %s\n", url, store_path)
+
 	local_file, err := os.OpenFile(store_path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+
 	// File already exists:
 	if os.IsExist(err) {
+		fmt.Printf("File exists...\n")
 		var fi os.FileInfo
 		var head_rsp *http.Response
 
@@ -34,16 +39,23 @@ func downloadFile(url string, id int64, ext string) (string, error) {
 		fi, err = os.Stat(store_path)
 		file_size := fi.Size()
 
+		fmt.Printf("File size = %d\n", file_size)
+
 		// HEAD to get download file size:
 		head_rsp, err = http.Head(url)
 		if err == nil {
+			fmt.Printf("HEAD reports size = %d\n", head_rsp.ContentLength)
+
 			if head_rsp.ContentLength > 0 {
 				if file_size == head_rsp.ContentLength {
+					fmt.Println("Same file size; skip")
 					// File is same size; do nothing:
 					return store_path, nil
 				}
 			}
+
 			// File is not same size; redownload:
+			fmt.Println("Redownload")
 			local_file, err = os.OpenFile(store_path, os.O_RDWR|os.O_TRUNC|os.O_EXCL, 0600)
 		}
 	}
