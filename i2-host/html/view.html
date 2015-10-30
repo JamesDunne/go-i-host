@@ -106,9 +106,15 @@ body {
             if (playFmt != "gif") {
                 // Browser can play webm or mp4:
                 var src = document.createElement("source");
+                src.setAttribute("src",  "/{{.Base62ID}}." + playFmt);
+                src.setAttribute("type", "video/" + playFmt);
+                vid.appendChild(src);
+                // Fall back to imgur if not found locally:
+                src = document.createElement("source");
                 src.setAttribute("src",  "{{.ImageURL}}." + playFmt);
                 src.setAttribute("type", "video/" + playFmt);
                 vid.appendChild(src);
+
                 vid.addEventListener('click', function() {
                     if (vid.paused)
                         vid.play();

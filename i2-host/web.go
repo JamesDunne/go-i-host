@@ -1049,7 +1049,8 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 
 	// Look up the image's record by base62 encoded ID:
 	filename := path.Base(req.URL.Path)
-	filename = filename[0 : len(filename)-len(path.Ext(req.URL.Path))]
+	req_ext := path.Ext(req.URL.Path)
+	filename = filename[0 : len(filename)-len(req_ext)]
 
 	id := b62.Decode(filename) - 10000
 
@@ -1082,7 +1083,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	if img.Kind == "" {
 		img.Kind = "gif"
 	}
-	mime, ext, thumbExt := imageKindTo(img.Kind)
+	mime, _, thumbExt := imageKindTo(img.Kind)
 
 	// Find the image file:
 	img_name := strconv.FormatInt(img.ID, 10)
@@ -1113,7 +1114,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return nil
 	} else if dir == "/t" {
 		// Serve thumbnail file:
-		local_path := path.Join(store_folder(), img_name+ext)
+		local_path := path.Join(store_folder(), img_name+req_ext)
 		thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
 		if werr := web.AsError(ensureThumbnail(local_path, thumb_path), http.StatusInternalServerError); werr != nil {
 			runtime.GC()
@@ -1140,7 +1141,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 	// Serve actual image contents:
 	if xrGif != "" {
 		// Pass request to nginx to serve static content file:
-		redirPath := path.Join(xrGif, img_name+ext)
+		redirPath := path.Join(xrGif, img_name+req_ext)
 
 		rsp.Header().Set("X-Accel-Redirect", redirPath)
 		rsp.Header().Set("Content-Type", mime)
@@ -1149,7 +1150,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 		return nil
 	} else {
 		// Serve content directly with the proper mime-type:
-		local_path := path.Join(store_folder(), img_name+ext)
+		local_path := path.Join(store_folder(), img_name+req_ext)
 
 		rsp.Header().Set("Content-Type", mime)
 		http.ServeFile(rsp, req, local_path)
