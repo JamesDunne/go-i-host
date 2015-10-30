@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 import "github.com/JamesDunne/go-util/web"
@@ -132,7 +133,7 @@ type imageStoreRequest struct {
 	Keywords  string `json:"keywords"`
 
 	CollectionName string
-	LocalPath      string
+	PostCreation   func(id int64, newImage *Image) *web.Error
 }
 
 func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
@@ -159,49 +160,19 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 			newImage.Keywords = titleToKeywords(newImage.Title)
 		}
 
-		if req.LocalPath != "" {
-			// Do some local image processing first:
-			var firstImage image.Image
+		if newImage.Kind == "" {
+			newImage.Kind = "gif"
+		}
 
-			firstImage, newImage.Kind, err = decodeFirstImage(req.LocalPath)
-			defer func() { firstImage = nil }()
-			if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
-				return
-			}
+		// Create the DB record:
+		id, err = api.NewImage(newImage)
+		if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
+			return
+		}
 
-			if newImage.Kind == "" {
-				newImage.Kind = "gif"
-			}
-			_, ext, thumbExt := imageKindTo(newImage.Kind)
-
-			// Create the DB record:
-			id, err = api.NewImage(newImage)
-			if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
-				return
-			}
-
-			// Rename the file:
-			img_name := strconv.FormatInt(id, 10)
-			os.MkdirAll(store_folder(), 0755)
-			store_path := path.Join(store_folder(), img_name+ext)
-			if werr = web.AsError(os.Rename(req.LocalPath, store_path), http.StatusInternalServerError); werr != nil {
-				return
-			}
-
-			// Generate a thumbnail:
-			os.MkdirAll(thumb_folder(), 0755)
-			thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
-			if werr = web.AsError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
-				return
-			}
-		} else {
-			if newImage.Kind == "" {
-				newImage.Kind = "gif"
-			}
-
-			// Create the DB record:
-			id, err = api.NewImage(newImage)
-			if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
+		// Run post-creation function:
+		if req.PostCreation != nil {
+			if werr = req.PostCreation(id, newImage); werr != nil {
 				return
 			}
 		}
@@ -215,12 +186,79 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 	return id, nil
 }
 
+func downloadFile(url string) (string, *web.Error) {
+	// Do a HTTP GET to fetch the image:
+	img_rsp, err := http.Get(url)
+	if err != nil {
+		return "", web.AsError(err, http.StatusInternalServerError)
+	}
+	defer img_rsp.Body.Close()
+
+	// Create a local temporary file to download to:
+	os.MkdirAll(tmp_folder(), 0755)
+	local_file, err := TempFile(tmp_folder(), "dl-", "")
+	if err != nil {
+		return "", web.AsError(err, http.StatusInternalServerError)
+	}
+	defer local_file.Close()
+
+	// Download file:
+	_, err = io.Copy(local_file, img_rsp.Body)
+	if err != nil {
+		return "", web.AsError(err, http.StatusInternalServerError)
+	}
+
+	return local_file.Name(), nil
+}
+
+func moveToStoreFolder(local_path string, id int64, ext string) (werr *web.Error) {
+	// Move and rename the file:
+	img_name := strconv.FormatInt(id, 10)
+	os.MkdirAll(store_folder(), 0755)
+	store_path := path.Join(store_folder(), img_name+ext)
+	if werr = web.AsError(os.Rename(local_path, store_path), http.StatusInternalServerError); werr != nil {
+		return
+	}
+	return nil
+}
+
+func moveFiles(local_path string, id int64, newImage *Image) (werr *web.Error) {
+	// Do some local image processing first:
+	var firstImage image.Image
+	var err error
+
+	firstImage, newImage.Kind, err = decodeFirstImage(local_path)
+	defer func() { firstImage = nil }()
+	if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
+		return
+	}
+
+	_, ext, thumbExt := imageKindTo(newImage.Kind)
+
+	// Move the file into the store folder:
+	if werr = moveToStoreFolder(local_path, id, ext); werr != nil {
+		return
+	}
+
+	// Generate a thumbnail:
+	img_name := strconv.FormatInt(id, 10)
+	os.MkdirAll(thumb_folder(), 0755)
+	thumb_path := path.Join(thumb_folder(), img_name+thumbExt)
+	if werr = web.AsError(generateThumbnail(firstImage, newImage.Kind, thumb_path), http.StatusInternalServerError); werr != nil {
+		return
+	}
+
+	return nil
+}
+
 func downloadImageFor(store *imageStoreRequest) *web.Error {
 	// Validate the URL:
 	imgurl, err := url.Parse(store.SourceURL)
 	if err != nil {
 		return web.AsError(err, http.StatusBadRequest)
 	}
+
+	fetchurl := store.SourceURL
 
 	// Check if it's a youtube link:
 	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "www.youtube.com") {
@@ -230,7 +268,6 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 		}
 
 		store.Kind = "youtube"
-		store.LocalPath = ""
 		store.SourceURL = imgurl.Query().Get("v")
 		return nil
 	}
@@ -238,34 +275,57 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 	// Check for imgur's gifv format:
 	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "i.imgur.com") && (filepath.Ext(imgurl.Path) == ".gifv") {
 		store.Kind = "imgur-gifv"
-		store.LocalPath = ""
 		store.SourceURL = filename(imgurl.Path[1:])
+
+		// Background-fetch the GIF, WEBM, and MP4 files:
+		wg := &sync.WaitGroup{}
+		wg.Add(3)
+		fetch_func := func(ext string, path *string) {
+			defer wg.Done()
+
+			// Fetch the GIF version:
+			var werr *web.Error
+			*path, werr = downloadFile("http://i.imgur.com/" + store.SourceURL + ext)
+			if werr != nil {
+				log.Println(werr)
+				return
+			}
+		}
+
+		var (
+			gif_file  string
+			webm_file string
+			mp4_file  string
+		)
+
+		go fetch_func(".gif", &gif_file)
+		go fetch_func(".webm", &webm_file)
+		go fetch_func(".mp4", &mp4_file)
+
+		// Function to run after DB record creation:
+		store.PostCreation = func(id int64, newImage *Image) (werr *web.Error) {
+			// Wait for all files to download:
+			wg.Wait()
+
+			// Move temp files to final storage:
+			moveToStoreFolder(gif_file, id, ".gif")
+			moveToStoreFolder(webm_file, id, ".webm")
+			moveToStoreFolder(mp4_file, id, ".mp4")
+			return nil
+		}
 		return nil
 	}
 
 	// Do a HTTP GET to fetch the image:
-	img_rsp, err := http.Get(store.SourceURL)
-	if err != nil {
-		return web.AsError(err, http.StatusInternalServerError)
-	}
-	defer img_rsp.Body.Close()
-
-	// Create a local temporary file to download to:
-	os.MkdirAll(tmp_folder(), 0755)
-	local_file, err := TempFile(tmp_folder(), "dl-", "")
-	if err != nil {
-		return web.AsError(err, http.StatusInternalServerError)
-	}
-	defer local_file.Close()
-
-	store.LocalPath = local_file.Name()
-
-	// Download file:
-	_, err = io.Copy(local_file, img_rsp.Body)
-	if err != nil {
-		return web.AsError(err, http.StatusInternalServerError)
+	local_path, werr := downloadFile(fetchurl)
+	if werr != nil {
+		return werr
 	}
 
+	// Function to run after DB record creation:
+	store.PostCreation = func(id int64, newImage *Image) (werr *web.Error) {
+		return moveFiles(local_path, id, newImage)
+	}
 	return nil
 }
 
@@ -528,7 +588,10 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 					}
 					defer f.Close()
 
-					store.LocalPath = f.Name()
+					local_path := f.Name()
+					store.PostCreation = func(id int64, newImage *Image) (werr *web.Error) {
+						return moveFiles(local_path, id, newImage)
+					}
 
 					if _, err := io.Copy(f, part); err != nil {
 						return web.AsError(err, http.StatusInternalServerError)
