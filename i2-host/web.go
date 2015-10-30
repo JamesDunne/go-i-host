@@ -1097,12 +1097,12 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			var err error
 
 			width, height, model.Kind, err = getImageInfo(local_path)
-			if werr := web.AsError(err, http.StatusInternalServerError); werr != nil {
-				return werr.AsJSON()
+			if err != nil {
+				log.Println(err)
+			} else {
+				model.Width = &width
+				model.Height = &height
 			}
-
-			model.Width = &width
-			model.Height = &height
 		}
 
 		web.JsonSuccess(rsp, model)
