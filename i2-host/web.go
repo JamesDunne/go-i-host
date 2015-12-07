@@ -524,6 +524,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			return nil
 		} else if collectionName, ok := web.MatchSimpleRoute(req.URL.Path, "/col/upload"); ok {
 			// Upload a new image:
+			_ = "breakpoint"
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
 				Submitter:      req.RemoteAddr,
@@ -581,7 +582,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 				// Copy upload data to a local file:
 				store.SourceURL = "file://" + part.FileName()
 
-				return func() *web.Error {
+				werr := func() *web.Error {
 					os.MkdirAll(tmp_folder(), 0755)
 					f, err := TempFile(tmp_folder(), "up-", path.Ext(part.FileName()))
 					if err != nil {
@@ -598,7 +599,10 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 						return web.AsError(err, http.StatusInternalServerError)
 					}
 					return nil
-				}().AsHTML()
+				}()
+				if werr.AsHTML().Respond(rsp) {
+					return werr
+				}
 			}
 
 			// Store it in the database and generate thumbnail:
