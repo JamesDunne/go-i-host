@@ -621,6 +621,52 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			redir_url := path.Join("/b/", b62.Encode(id+10000))
 			http.Redirect(rsp, req, redir_url, http.StatusFound)
 			return nil
+		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/download"); ok {
+			id := b62.Decode(id_s) - 10000
+
+			var img *Image
+			if werr := useAPI(func(api *API) *web.Error {
+				var err error
+				img, err = api.GetImage(id)
+				return web.AsError(err, http.StatusInternalServerError)
+			}); werr != nil {
+				return werr.AsHTML()
+			}
+			if img == nil {
+				return web.AsError(fmt.Errorf("Could not find image by ID"), http.StatusNotFound).AsHTML()
+			}
+
+			// Download the image:
+			storeRequest := &imageStoreRequest{
+				Kind:           img.Kind,
+				Title:          img.Title,
+				SourceURL:      *img.SourceURL,
+				Submitter:      img.Submitter,
+				IsClean:        img.IsClean,
+				Keywords:       img.Keywords,
+				CollectionName: img.CollectionName,
+			}
+			if werr := downloadImageFor(storeRequest); werr != nil {
+				return werr.AsHTML()
+			}
+			if werr := storeRequest.PostCreation(img.ID, img); werr != nil {
+				return werr.AsHTML()
+			}
+
+			// Update the image record:
+			img.Kind = storeRequest.Kind
+			img.SourceURL = &storeRequest.SourceURL
+
+			// Process the update request:
+			if werr := useAPI(func(api *API) *web.Error {
+				return web.AsError(api.Update(img), http.StatusInternalServerError)
+			}); werr != nil {
+				return werr.AsHTML()
+			}
+
+			// Redirect back to edit page:
+			http.Redirect(rsp, req, "/admin/edit/"+id_s, http.StatusFound)
+			return nil
 		} else if id_s, ok := web.MatchSimpleRoute(req.URL.Path, "/admin/update"); ok {
 			id := b62.Decode(id_s) - 10000
 

@@ -70,6 +70,9 @@ body {
             <input type="reset" value="Reset" />&nbsp;&nbsp;&nbsp;
             <input type="submit" name="delete" value="Delete" style="border: 3px red solid;" />
         </form><br/>
+		<form action="/admin/download/{{.Base62ID}}" method="POST">
+			<input type="submit" value="Re-download" style="border: 3px red solid;" />
+		</form>
     </div>
 {{end}}
     <div id="container" data-id="{{.ID}}">
