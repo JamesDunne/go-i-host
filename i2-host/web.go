@@ -177,6 +177,12 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 			}
 		}
 
+		// Update image record with new Kind or other information discovered after download:
+		err = api.Update(newImage)
+		if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
+			return
+		}
+
 		return nil
 	})
 	if werr != nil {
@@ -649,6 +655,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			img.CollectionName = req.FormValue("collection")
 			img.Submitter = req.FormValue("submitter")
 			img.IsClean = (req.FormValue("nsfw") == "")
+			img.Kind = req.FormValue("kind")
 
 			// Generate keywords from title:
 			if img.Keywords == "" {
