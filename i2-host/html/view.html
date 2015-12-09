@@ -61,6 +61,7 @@ body {
             <label for="keywords">Keywords:</label><input type="text" id="keywords" name="keywords" value="{{.Keywords}}" /><br/>
             <label for="collection">Collection:</label><input type="text" id="collection" name="collection" value="{{.CollectionName}}" /><br/>
             <label for="submitter">Submitter:</label><input type="text" id="submitter" name="submitter" value="{{.Submitter}}" /><br/>
+            <label for="submitter">Source:</label><input type="text" id="source" name="source" value="{{.SourceURL}}" /><br/>
             <input type="checkbox" id="nsfw" name="nsfw"{{if not .IsClean}} checked="checked"{{end}} /><label for="nsfw">NSFW</label><br/>
             <br/>
             <span style="width: 6em">&nbsp;</span>
@@ -109,9 +110,9 @@ body {
                 src.setAttribute("src",  "/{{.Base62ID}}." + playFmt);
                 src.setAttribute("type", "video/" + playFmt);
                 vid.appendChild(src);
-                // Fall back to imgur if not found locally:
+				// Fall back to imgur if not found locally:
                 src = document.createElement("source");
-                src.setAttribute("src",  "{{.ImageURL}}." + playFmt);
+				src.setAttribute("src",  "{{.ImageURL}}." + playFmt);
                 src.setAttribute("type", "video/" + playFmt);
                 vid.appendChild(src);
 
