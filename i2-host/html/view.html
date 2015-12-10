@@ -133,10 +133,34 @@ body {
                 vid.parentNode.replaceChild(imggif, vid);
             }
         </script>
+{{else if (eq .Kind "mp4")}}
+        <video id="imain" poster="{{.ThumbURL}}" preload="auto" autoplay="autoplay" loop="loop" webkit-playsinline>
+        </video>
+        <script>
+            var vid = document.getElementById("imain"),
+                playFmt = "mp4";
+
+            vid.addEventListener('loadedmetadata', function(e) {
+                //console.log(vid.videoWidth, vid.videoHeight);
+                loaded(this);
+            });
+
+            {
+                var src = document.createElement("source");
+                src.setAttribute("src",  "/{{.Base62ID}}." + playFmt);
+                src.setAttribute("type", "video/" + playFmt);
+                vid.appendChild(src);
+
+                vid.addEventListener('click', function() {
+                    if (vid.paused)
+                        vid.play();
+                    else
+                        vid.pause();
+                },false);
+            }
+        </script>
 {{else}}
         <img id="imain" onload="loaded(this)" style="display: none" src="{{.ImageURL}}" alt="{{.Title}}" title="{{.Title}}" />
-{{end}}
-{{if not (eq .Kind "imgur-gifv")}}
         <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 {{end}}
     </div>
@@ -152,6 +176,9 @@ var is_loaded = false;
 function loaded(img) {
     is_loaded = true;
 {{if (eq .Kind "imgur-gifv")}}
+    iw = img.videoWidth;
+    ih = img.videoHeight;
+{{else if (eq .Kind "mp4")}}
     iw = img.videoWidth;
     ih = img.videoHeight;
 {{else if not (eq .Kind "youtube")}}
@@ -182,6 +209,9 @@ function set_new_size(img) {
     img.width = "" + nw;
     img.height = "" + nh;
 {{else if (eq .Kind "imgur-gifv")}}
+    img.width = nw;
+    img.height = nh;
+{{else if (eq .Kind "mp4")}}
     img.width = nw;
     img.height = nh;
 {{else}}
