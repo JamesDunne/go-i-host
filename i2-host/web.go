@@ -180,6 +180,7 @@ func storeImage(req *imageStoreRequest) (id int64, werr *web.Error) {
 		// Update image record with new Kind or other information discovered after download:
 		err = api.Update(newImage)
 		if werr = web.AsError(err, http.StatusInternalServerError); werr != nil {
+			//log.Println(err)
 			return
 		}
 
@@ -285,7 +286,15 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 		store.Kind = "imgur-gifv"
 		_, fname := filepath.Split(imgurl.Path)
 		store.SourceURL = filename(fname)
+	}
 
+	if imgurl.Host == "imgur.com" && imgurl.Path[0:9] == "/gallery/" {
+		store.Kind = "imgur-gifv"
+		_, fname := filepath.Split(imgurl.Path)
+		store.SourceURL = filename(fname)
+	}
+
+	if store.Kind == "imgur-gifv" {
 		// Background-fetch the WEBM and MP4 files:
 		wg := &sync.WaitGroup{}
 		fetch_func := func(ext string, path *string) {
