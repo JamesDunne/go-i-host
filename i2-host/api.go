@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
+
 	_ "github.com/JamesDunne/go-util/base"
 	_ "github.com/JamesDunne/go-util/db/sqlite3"
 	"github.com/JamesDunne/go-util/db/sqlx"
-	"strconv"
-	"strings"
 )
 
 // Runes used to split words:
@@ -280,6 +281,7 @@ func (api *API) NewImage(img *Image) (int64, error) {
 		return 0, err
 	}
 
+	img.ID = id
 	return id, nil
 }
 
@@ -291,6 +293,7 @@ func (api *API) Update(img *Image) error {
 	query = `update Image set ` + columnNameSet(nonIDColumnNames).ToUpdateSet(2) + ` where ID = ?1`
 	args = img.toSQLArgs()
 
+	//log.Printf("SQL: %s\n%v\n", query, args)
 	_, err := api.db.Exec(query, args...)
 	if err != nil {
 		return err
