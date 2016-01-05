@@ -265,6 +265,7 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 	}
 
 	fetchurl := store.SourceURL
+	ext := filepath.Ext(imgurl.Path)
 
 	// Check if it's a youtube link:
 	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "www.youtube.com") {
@@ -279,9 +280,11 @@ func downloadImageFor(store *imageStoreRequest) *web.Error {
 	}
 
 	// Check for imgur's gifv format:
-	if (imgurl.Scheme == "http" || imgurl.Scheme == "https") && (imgurl.Host == "i.imgur.com") && (filepath.Ext(imgurl.Path) == ".gifv") {
+	if (imgurl.Host == "imgur.com" || imgurl.Host == "i.imgur.com") &&
+		(ext == ".gifv" || ext == ".webm" || ext == ".mp4") {
 		store.Kind = "imgur-gifv"
-		store.SourceURL = filename(imgurl.Path[1:])
+		_, fname := filepath.Split(imgurl.Path)
+		store.SourceURL = filename(fname)
 
 		// Background-fetch the WEBM and MP4 files:
 		wg := &sync.WaitGroup{}
