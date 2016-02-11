@@ -85,9 +85,17 @@ body {
             var vid = document.getElementById("imain"),
                 playFmt = "gif";
 
+			vid.addEventListener('canplay', function() {
+				vid.play();
+			});
+
+			vid.load();
+			vid.play();
+
             vid.addEventListener('loadedmetadata', function(e) {
                 //console.log(vid.videoWidth, vid.videoHeight);
                 loaded(this);
+				vid.play();
             });
 
             if (window.location.search.indexOf("fmt=gif") >= 0) {
