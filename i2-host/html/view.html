@@ -109,10 +109,10 @@ body {
                 playFmt = "mp4";
             } else if (!!vid.canPlayType) {
                 // Detect what the browser can display:
-                if (vid.canPlayType("video/webm")) {
-                    playFmt = "webm";
-                } else if (vid.canPlayType("video/mp4")) {
+                if (vid.canPlayType("video/mp4")) {
                     playFmt = "mp4";
+                } else if (vid.canPlayType("video/webm")) {
+                    playFmt = "webm";
                 }
             }
 
