@@ -13,7 +13,7 @@
 {{else if (eq .Kind "imgur-gifv")}}
     <meta property="og:image" content="{{.ThumbURL}}">
 {{else}}
-    <meta property="og:image" content="http://i.bittwiddlers.org{{.ThumbURL}}">
+    <meta property="og:image" content="http://i.bittwiddlers.org{{.ImageURL}}">
 {{end}}
     <title>{{.Title}}</title>
 
@@ -52,6 +52,82 @@ body {
 }
 {{end}}
 </style>
+<script>
+{{if (eq .Kind "youtube")}}
+var iw = 560, ih = 315;
+{{else}}
+var iw = 1, ih = 1;
+{{end}}
+var nw = 1, nh = 1;
+var is_loaded = false;
+
+function loaded(img) {
+    is_loaded = true;
+{{if (eq .Kind "imgur-gifv")}}
+    iw = img.videoWidth;
+    ih = img.videoHeight;
+{{else if (eq .Kind "mp4")}}
+    iw = img.videoWidth;
+    ih = img.videoHeight;
+{{else if not (eq .Kind "youtube")}}
+    // Grab these values on load of img because they may change later on:
+    iw = img.width;
+    ih = img.height;
+{{end}}
+    set_new_size(img);
+
+    // Hide the loader GIF and show the main image:
+    var loader = document.getElementById("loader");
+    if (loader != void(0)) {
+        loader.style.display = "none";
+    }
+}
+
+function resize() {
+    if (!is_loaded) return;
+    var imain = document.getElementById("imain")
+    if ((imain === undefined) || (imain === null)) return;
+    set_new_size(imain);
+}
+
+function set_new_size(img) {
+    calc_new_size(img);
+{{if (eq .Kind "youtube")}}
+    img.style.display = "block";
+    img.width = "" + nw;
+    img.height = "" + nh;
+{{else if (eq .Kind "imgur-gifv")}}
+    img.width = nw;
+    img.height = nh;
+{{else if (eq .Kind "mp4")}}
+    img.width = nw;
+    img.height = nh;
+{{else}}
+    img.style.display = "inline";
+    img.style.width = "" + nw + "px";
+    img.style.height = "" + nh + "px";
+{{end}}
+}
+
+function calc_new_size(img) {
+    // Determine the scaling factor to fill the screen:
+    var scale = 1;
+    var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
+
+    if ({{if not $.FillScreen}}(window.devicePixelRatio >= 2) || ((iw > sw) || (ih > sh)){{else}}true{{end}}) {
+        var wscale = sw / iw;
+        var hscale = sh / ih;
+        if (wscale < hscale)
+            scale = wscale;
+        else
+            scale = hscale;
+    }
+
+    // Set new dimensions:
+    nw = (iw * scale);
+    nh = (ih * scale);
+}
+</script>
 </head>
 <body onresize="resize()">
 {{if $.IsAdmin}}
@@ -172,82 +248,6 @@ body {
         <img id="loader" alt="loading" src="data:image/gif;base64,R0lGODlhEAAQAPIAAAAAAAAF/wABPAADvAAF/wADnAACfAACbCH/C05FVFNDQVBFMi4wAwEAAAAh/hpDcmVhdGVkIHdpdGggYWpheGxvYWQuaW5mbwAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmcG2LmDEwnHQLVsYOd2mBzkYDAdKa+dIAAAh+QQJCgAAACwAAAAAEAAQAAADNAi63P5OjCEgG4QMu7DmikRxQlFUYDEZIGBMRVsaqHwctXXf7WEYB4Ag1xjihkMZsiUkKhIAIfkECQoAAAAsAAAAABAAEAAAAzYIujIjK8pByJDMlFYvBoVjHA70GU7xSUJhmKtwHPAKzLO9HMaoKwJZ7Rf8AYPDDzKpZBqfvwQAIfkECQoAAAAsAAAAABAAEAAAAzMIumIlK8oyhpHsnFZfhYumCYUhDAQxRIdhHBGqRoKw0R8DYlJd8z0fMDgsGo/IpHI5TAAAIfkECQoAAAAsAAAAABAAEAAAAzIIunInK0rnZBTwGPNMgQwmdsNgXGJUlIWEuR5oWUIpz8pAEAMe6TwfwyYsGo/IpFKSAAAh+QQJCgAAACwAAAAAEAAQAAADMwi6IMKQORfjdOe82p4wGccc4CEuQradylesojEMBgsUc2G7sDX3lQGBMLAJibufbSlKAAAh+QQJCgAAACwAAAAAEAAQAAADMgi63P7wCRHZnFVdmgHu2nFwlWCI3WGc3TSWhUFGxTAUkGCbtgENBMJAEJsxgMLWzpEAACH5BAkKAAAALAAAAAAQABAAAAMyCLrc/jDKSatlQtScKdceCAjDII7HcQ4EMTCpyrCuUBjCYRgHVtqlAiB1YhiCnlsRkAAAOwAAAAAAAAAAAA==" />
 {{end}}
     </div>
-<script>
-{{if (eq .Kind "youtube")}}
-var iw = 560, ih = 315;
-{{else}}
-var iw = 1, ih = 1;
-{{end}}
-var nw = 1, nh = 1;
-var is_loaded = false;
-
-function loaded(img) {
-    is_loaded = true;
-{{if (eq .Kind "imgur-gifv")}}
-    iw = img.videoWidth;
-    ih = img.videoHeight;
-{{else if (eq .Kind "mp4")}}
-    iw = img.videoWidth;
-    ih = img.videoHeight;
-{{else if not (eq .Kind "youtube")}}
-    // Grab these values on load of img because they may change later on:
-    iw = img.width;
-    ih = img.height;
-{{end}}
-    set_new_size(img);
-
-    // Hide the loader GIF and show the main image:
-    var loader = document.getElementById("loader");
-    if (loader != void(0)) {
-        loader.style.display = "none";
-    }
-}
-
-function resize() {
-    if (!is_loaded) return;
-    var imain = document.getElementById("imain")
-    if ((imain === undefined) || (imain === null)) return;
-    set_new_size(imain);
-}
-
-function set_new_size(img) {
-    calc_new_size(img);
-{{if (eq .Kind "youtube")}}
-    img.style.display = "block";
-    img.width = "" + nw;
-    img.height = "" + nh;
-{{else if (eq .Kind "imgur-gifv")}}
-    img.width = nw;
-    img.height = nh;
-{{else if (eq .Kind "mp4")}}
-    img.width = nw;
-    img.height = nh;
-{{else}}
-    img.style.display = "inline";
-    img.style.width = "" + nw + "px";
-    img.style.height = "" + nh + "px";
-{{end}}
-}
-
-function calc_new_size(img) {
-    // Determine the scaling factor to fill the screen:
-    var scale = 1;
-    var sw = Math.max(1, window.innerWidth - 8), sh = Math.max(1, window.innerHeight - 8);
-
-    if ({{if not $.FillScreen}}(window.devicePixelRatio >= 2) || ((iw > sw) || (ih > sh)){{else}}true{{end}}) {
-        var wscale = sw / iw;
-        var hscale = sh / ih;
-        if (wscale < hscale)
-            scale = wscale;
-        else
-            scale = hscale;
-    }
-
-    // Set new dimensions:
-    nw = (iw * scale);
-    nh = (ih * scale);
-}
-</script>
 </body>
 </html>
 {{end}}{{end}}
