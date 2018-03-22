@@ -46,8 +46,9 @@ type ImageViewModel struct {
 	Kind           string  `json:"kind"`
 	ImageURL       string  `json:"imageURL"`
 	ThumbURL       string  `json:"thumbURL"`
-	ThumbWidth     *string `json:"thumbWidth,omitempty"`
-	ThumbHeight    *string `json:"thumbHeight,omitempty"`
+	OGImageURL     string  `json:"ogImageURL"`
+	OGImageWidth   *string `json:"ogImageWidth,omitempty"`
+	OGImageHeight  *string `json:"ogImageHeight,omitempty"`
 	Submitter      string  `json:"submitter,omitempty"`
 	CollectionName string  `json:"collectionName,omitempty"`
 	SourceURL      *string `json:"sourceURL,omitempty"`
@@ -87,14 +88,13 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 			hash = hash[1:]
 		}
 		o.ImageURL = "http://i.imgur.com/" + hash
-		//o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
-		o.ThumbURL = "http://i.imgur.com/" + hash + ".gif"
+		o.OGImageURL = "http://i.imgur.com/" + hash + ".gif"
+		o.ThumbURL = "http://i.imgur.com/" + hash + "b.jpg"
 		break
 	default:
 		o.ImageURL = "http://i.bittwiddlers.org/" + o.Base62ID + ext
-		o.ThumbURL = o.ImageURL
-		_ = thumbExt
-		//o.ThumbURL = "/t/" + o.Base62ID + thumbExt
+		o.OGImageURL = o.ImageURL
+		o.ThumbURL = "/t/" + o.Base62ID + thumbExt
 
 		break
 	}
