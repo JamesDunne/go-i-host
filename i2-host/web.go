@@ -46,6 +46,8 @@ type ImageViewModel struct {
 	Kind           string  `json:"kind"`
 	ImageURL       string  `json:"imageURL"`
 	ThumbURL       string  `json:"thumbURL"`
+	ThumbWidth     *string `json:"thumbWidth,omitempty"`
+	ThumbHeight    *string `json:"thumbHeight,omitempty"`
 	Submitter      string  `json:"submitter,omitempty"`
 	CollectionName string  `json:"collectionName,omitempty"`
 	SourceURL      *string `json:"sourceURL,omitempty"`
@@ -76,22 +78,28 @@ func xlatImageViewModel(i *Image, o *ImageViewModel) *ImageViewModel {
 	_, ext, thumbExt := imageKindTo(o.Kind)
 	switch o.Kind {
 	case "youtube":
-		o.ImageURL = "//www.youtube.com/embed/" + *i.SourceURL
-		o.ThumbURL = "//i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
+		o.ImageURL = "http://www.youtube.com/embed/" + *i.SourceURL
+		o.ThumbURL = "http://i1.ytimg.com/vi/" + *i.SourceURL + "/hqdefault.jpg"
 		break
 	case "imgur-gifv":
 		hash := filename(*i.SourceURL)
 		if strings.HasPrefix(hash, "/") {
 			hash = hash[1:]
 		}
-		o.ImageURL = "//i.imgur.com/" + hash
-		o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
+		o.ImageURL = "http://i.imgur.com/" + hash
+		//o.ThumbURL = "//i.imgur.com/" + hash + "b.jpg"
+		o.ThumbURL = "http://i.imgur.com/" + hash + ".gif"
 		break
 	default:
-		o.ImageURL = "/" + o.Base62ID + ext
-		o.ThumbURL = "/t/" + o.Base62ID + thumbExt
+		o.ImageURL = "http://i.bittwiddlers.org/" + o.Base62ID + ext
+		o.ThumbURL = o.ImageURL
+		_ = thumbExt
+		//o.ThumbURL = "/t/" + o.Base62ID + thumbExt
+
 		break
 	}
+
+	// TODO: add og:image:width and og:image:height tags.
 
 	return o
 }

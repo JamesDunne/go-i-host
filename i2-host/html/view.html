@@ -8,13 +8,7 @@
     <meta property="og:site_name" content="i.bittwiddlers.org"/>
     <meta property="og:title" content="{{.Title}}"/>
     <meta property="og:description" content=""/>
-{{if (eq .Kind "youtube")}}
     <meta property="og:image" content="{{.ThumbURL}}">
-{{else if (eq .Kind "imgur-gifv")}}
-    <meta property="og:image" content="{{.ThumbURL}}">
-{{else}}
-    <meta property="og:image" content="http://i.bittwiddlers.org{{.ImageURL}}">
-{{end}}
     <title>{{.Title}}</title>
 
 <style type="text/css">
