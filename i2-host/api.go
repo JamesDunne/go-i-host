@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	_ "github.com/JamesDunne/go-util/base"
-	_ "github.com/JamesDunne/go-util/db/sqlite3"
-	"github.com/JamesDunne/go-util/db/sqlx"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/jmoiron/sqlx"
 )
 
 // Runes used to split words:
@@ -58,7 +58,7 @@ func (api *API) ddl(cmds ...string) {
 	}
 }
 
-func (api *API) userVersion() (version string, err error) {
+func (api *API) userVersion() (version int64, err error) {
 	uvRows, err := api.db.Queryx(`pragma user_version;`)
 	if err != nil {
 		return
@@ -72,7 +72,7 @@ func (api *API) userVersion() (version string, err error) {
 	if err != nil {
 		return
 	}
-	version = uv[0].(string)
+	version = uv[0].(int64)
 	return
 }
 
@@ -92,7 +92,7 @@ func NewAPI() (api *API, err error) {
 	}
 
 	// Set up the schema:
-	if userVersion == "0" {
+	if userVersion == 0 {
 		api.ddl(
 			`
 create table if not exists Image (
@@ -102,9 +102,9 @@ create table if not exists Image (
 )`,
 			`pragma user_version = 1`,
 		)
-		userVersion = "1"
+		userVersion = 1
 	}
-	if userVersion == "1" {
+	if userVersion == 1 {
 		api.ddl(
 			`alter table Image add column SourceURL TEXT`,
 			`alter table Image add column RedirectToID INTEGER`,
@@ -112,22 +112,22 @@ create table if not exists Image (
 			`alter table Image add column IsClean INTEGER NOT NULL DEFAULT 0`,
 			`pragma user_version = 2`,
 		)
-		userVersion = "2"
+		userVersion = 2
 	}
-	if userVersion == "2" {
+	if userVersion == 2 {
 		api.ddl(
 			`alter table Image add column CollectionName TEXT NOT NULL DEFAULT ''`,
 			`alter table Image add column Submitter TEXT NOT NULL DEFAULT ''`,
 			`pragma user_version = 3`,
 		)
-		userVersion = "3"
+		userVersion = 3
 	}
-	if userVersion == "3" {
+	if userVersion == 3 {
 		api.ddl(
 			`alter table Image add column Keywords TEXT NOT NULL DEFAULT ''`,
 			`pragma user_version = 4`,
 		)
-		userVersion = "4"
+		userVersion = 4
 	}
 
 	return

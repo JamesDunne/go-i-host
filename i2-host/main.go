@@ -59,14 +59,17 @@ func main() {
 	xrThumb = *xrThumbArg
 
 	// Create/update the DB schema if needed:
+	log.Println("NewAPI()")
 	api, err := NewAPI()
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
+	log.Println("api.Close()")
 	api.Close()
 
 	// Watch the html templates for changes and reload them:
+	log.Println("watchTemplates()")
 	_, cleanup, err := web.WatchTemplates("ui", html_path(), "*.html", nil, &uiTmpl)
 	if err != nil {
 		log.Println(err)
@@ -80,6 +83,7 @@ func main() {
 	}()
 
 	// Start the server:
+	log.Println("ServeMain()")
 	_, err = base.ServeMain(listen_addr, func(l net.Listener) error {
 		return http.Serve(l, web.ReportErrors(web.Log(web.DefaultErrorLog, web.ErrorHandlerFunc(requestHandler))))
 	})
