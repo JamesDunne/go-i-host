@@ -554,6 +554,7 @@ func requestHandler(rsp http.ResponseWriter, req *http.Request) *web.Error {
 			store := &imageStoreRequest{
 				CollectionName: collectionName,
 				Submitter:      req.RemoteAddr,
+				IsClean:        true,	// default unless nsfw=1 is supplied in form
 			}
 
 			if !web.IsMultipart(req) {
